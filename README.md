@@ -15,4 +15,5 @@ dys-api-fsc/
         server.ts
 
 
-
+curl -H "x-api-key: xxxxx" \
+  http://localhost:8080/order/1130565543

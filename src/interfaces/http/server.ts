@@ -3,6 +3,7 @@ import pinoHttp from 'pino-http';
 import { env } from '../../infrastructure/config/env';
 import { logger } from '../../infrastructure/logger/logger';
 import { orderRouter } from './routes/orderRoutes';
+import { apiKeyAuth } from './middlewares/apiKeyAuth';
 
 const app = express();
 
@@ -17,6 +18,9 @@ app.use(
   })
 );
 
+
+
+// Health abierto
 app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
@@ -24,7 +28,8 @@ app.get('/health', (_req, res) => {
     env: env.nodeEnv
   });
 });
-
+// 🔐 Protección con API Key para todas las rutas
+app.use(apiKeyAuth);
 app.use('/order', orderRouter);
 
 app.listen(env.port, () => {
