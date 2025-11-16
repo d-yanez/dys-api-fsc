@@ -1,0 +1,26 @@
+{
+  "name": "dys-api-fsc",
+  "version": "1.0.0",
+  "main": "dist/interfaces/http/server.js",
+  "license": "MIT",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/interfaces/http/server.ts",
+    "build": "rimraf dist && tsc",
+    "start": "node dist/interfaces/http/server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "fast-xml-parser": "^4.5.3",
+    "pino": "^9.3.0",
+    "pino-http": "^10.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.16.0",
+    "pino-pretty": "^13.1.2",
+    "rimraf": "^5.0.7",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.5.4"
+  }
+}
