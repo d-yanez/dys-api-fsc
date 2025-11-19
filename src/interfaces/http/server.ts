@@ -4,6 +4,8 @@ import { env } from '../../infrastructure/config/env';
 import { logger } from '../../infrastructure/logger/logger';
 import { orderRouter } from './routes/orderRoutes';
 import { apiKeyAuth } from './middlewares/apiKeyAuth';
+import { orderItemsRouter } from './routes/orderItemsRoutes';
+
 
 const app = express();
 
@@ -31,6 +33,7 @@ app.get('/health', (_req, res) => {
 // 🔐 Protección con API Key para todas las rutas
 app.use(apiKeyAuth);
 app.use('/order', orderRouter);
+app.use('/orderItems', orderItemsRouter);
 
 app.listen(env.port, () => {
   logger.info({ port: env.port }, '🚀 HTTP server listening');
