@@ -5,6 +5,7 @@ import { logger } from '../../infrastructure/logger/logger';
 import { orderRouter } from './routes/orderRoutes';
 import { apiKeyAuth } from './middlewares/apiKeyAuth';
 import { orderItemsRouter } from './routes/orderItemsRoutes';
+import { productRouter } from "./routes/productRoutes";
 
 
 const app = express();
@@ -34,6 +35,7 @@ app.get('/health', (_req, res) => {
 app.use(apiKeyAuth);
 app.use('/order', orderRouter);
 app.use('/orderItems', orderItemsRouter);
+app.use("/sku", productRouter);
 
 app.listen(env.port, () => {
   logger.info({ port: env.port }, '🚀 HTTP server listening');
