@@ -25,4 +25,4 @@ router.get(
   documentController.getShippingLabelByOrderId
 );
 
-export { router as documentRouter };
+export { router as documentRouter }; 
