@@ -1,0 +1,515 @@
+#XML de ordenes de FSC Pendientes:
+
+<?xml version="1.0" encoding="UTF-8"?>
+<SuccessResponse>
+    <Head>
+        <RequestId/>
+        <RequestAction>GetOrders</RequestAction>
+        <ResponseType>Orders</ResponseType>
+        <Timestamp>2025-11-29T05:40:39.168Z</Timestamp>
+        <TotalCount>6</TotalCount>
+    </Head>
+    <Body>
+        <Orders>
+            <Order>
+                <OrderId>1132794371</OrderId>
+                <CustomerFirstName>Karina</CustomerFirstName>
+                <CustomerLastName>Montes</CustomerLastName>
+                <OrderNumber>3215009643</OrderNumber>
+                <PaymentMethod>ecommPay</PaymentMethod>
+                <Remarks/>
+                <DeliveryInfo/>
+                <Price>28980.00</Price>
+                <GiftOption>0</GiftOption>
+                <GiftMessage/>
+                <VoucherCode/>
+                <CreatedAt>2025-11-29 01:16:45</CreatedAt>
+                <UpdatedAt>2025-11-29 01:16:48</UpdatedAt>
+                <AddressUpdatedAt>2025-11-29 01:16:45</AddressUpdatedAt>
+                <AddressBilling>
+                    <FirstName>Karina</FirstName>
+                    <LastName>Montes</LastName>
+                    <Address1>Esdras</Address1>
+                    <Address2>013</Address2>
+                    <Address3>013</Address3>
+                    <Address4/>
+                    <Address5/>
+                    <CustomerEmail/>
+                    <City>LOTA</City>
+                    <Ward>LOTA ALTO</Ward>
+                    <Region>BIOBÍO</Region>
+                    <PostCode>08106</PostCode>
+                    <Country>CL</Country>
+                    <Phone/>
+                    <Phone2/>
+                </AddressBilling>
+                <AddressShipping>
+                    <FirstName>Karina Montes</FirstName>
+                    <LastName>Montes</LastName>
+                    <Phone/>
+                    <Phone2/>
+                    <Address1>Esdras</Address1>
+                    <Address2>013</Address2>
+                    <Address3>013</Address3>
+                    <Address4/>
+                    <Address5/>
+                    <CustomerEmail/>
+                    <City>LOTA</City>
+                    <Ward>LOTA ALTO</Ward>
+                    <Region>BIOBÍO</Region>
+                    <Country>CL</Country>
+                    <PostCode/>
+                    <Latitude/>
+                    <Longitude/>
+                </AddressShipping>
+                <NationalRegistrationNumber>19139436-4</NationalRegistrationNumber>
+                <ItemsCount>1</ItemsCount>
+                <PromisedShippingTime>2025-12-01 15:59:00</PromisedShippingTime>
+                <ExtraAttributes>{"itemId":"1","deliveryOrderGroupId":"149221913650","originNode":"b477722f-b3f0-4bde-b481-7fe4f20ac11f","originNodeType":"SELLER","cityPoliticalAreaCode":"179fe506-5d82-4ac7-bd3d-91b1fe32d98c","statePoliticalAreaCode":"9573e7f4-77d7-4c1b-8d75-e9dc2bdcc91b","countryPoliticalAreaCode":"c4d77661-939e-487a-b645-356f0429c719","municipalPoliticalAreaCode":"179fe506-5d82-4ac7-bd3d-91b1fe32d98c"}</ExtraAttributes>
+                <ExtraBillingAttributes>
+                    <LegalId/>
+                    <FiscalPerson/>
+                    <DocumentType/>
+                    <ReceiverRegion/>
+                    <ReceiverAddress/>
+                    <ReceiverPostcode>-</ReceiverPostcode>
+                    <ReceiverLegalName/>
+                    <ReceiverMunicipality/>
+                    <ReceiverTypeRegimen/>
+                    <CustomerVerifierDigit/>
+                    <ReceiverPhonenumber/>
+                    <ReceiverEmail/>
+                    <ReceiverLocality/>
+                </ExtraBillingAttributes>
+                <InvoiceRequired>false</InvoiceRequired>
+                <OperatorCode>facl</OperatorCode>
+                <ShippingType>Dropshipping</ShippingType>
+                <GrandTotal>28,980.00</GrandTotal>
+                <ProductTotal>26,990.00</ProductTotal>
+                <TaxAmount>0.00</TaxAmount>
+                <ShippingFeeTotal>1,990.00</ShippingFeeTotal>
+                <ShippingTax>0.00</ShippingTax>
+                <Voucher>0.00</Voucher>
+                <Statuses>
+                    <Status>pending</Status>
+                </Statuses>
+            </Order>
+            <Order>
+                <OrderId>1132737468</OrderId>
+                <CustomerFirstName>Jeanette</CustomerFirstName>
+                <CustomerLastName>Rojas Maturana</CustomerLastName>
+                <OrderNumber>3214961287</OrderNumber>
+                <PaymentMethod>ecommPay</PaymentMethod>
+                <Remarks/>
+                <DeliveryInfo/>
+                <Price>13980.00</Price>
+                <GiftOption>0</GiftOption>
+                <GiftMessage/>
+                <VoucherCode/>
+                <CreatedAt>2025-11-28 23:38:47</CreatedAt>
+                <UpdatedAt>2025-11-28 23:38:51</UpdatedAt>
+                <AddressUpdatedAt>2025-11-28 23:38:47</AddressUpdatedAt>
+                <AddressBilling>
+                    <FirstName>Jeanette</FirstName>
+                    <LastName>Rojas Maturana</LastName>
+                    <Address1>avda lo errazuriz</Address1>
+                    <Address2>4098</Address2>
+                    <Address3/>
+                    <Address4/>
+                    <Address5/>
+                    <CustomerEmail/>
+                    <City>SANTIAGO</City>
+                    <Ward>MAIPU</Ward>
+                    <Region>REGION METROPOLITANA</Region>
+                    <PostCode>13119</PostCode>
+                    <Country>CL</Country>
+                    <Phone/>
+                    <Phone2/>
+                </AddressBilling>
+                <AddressShipping>
+                    <FirstName>Jeanette Rojas Maturana</FirstName>
+                    <LastName>Rojas Maturana</LastName>
+                    <Phone/>
+                    <Phone2/>
+                    <Address1>avda lo errazuriz</Address1>
+                    <Address2>4098</Address2>
+                    <Address3/>
+                    <Address4/>
+                    <Address5/>
+                    <CustomerEmail/>
+                    <City>SANTIAGO</City>
+                    <Ward>MAIPU</Ward>
+                    <Region>REGION METROPOLITANA</Region>
+                    <Country>CL</Country>
+                    <PostCode/>
+                    <Latitude/>
+                    <Longitude/>
+                </AddressShipping>
+                <NationalRegistrationNumber>8404335-4</NationalRegistrationNumber>
+                <ItemsCount>1</ItemsCount>
+                <PromisedShippingTime>2025-12-01 15:59:00</PromisedShippingTime>
+                <ExtraAttributes>{"itemId":"3","deliveryOrderGroupId":"149221847282","originNode":"b477722f-b3f0-4bde-b481-7fe4f20ac11f","originNodeType":"SELLER","cityPoliticalAreaCode":"461c6daa-5bd9-4532-9447-16a2c334d85b","statePoliticalAreaCode":"a768f0a2-bb5d-4d51-8cad-03b48b25c4a4","countryPoliticalAreaCode":"c4d77661-939e-487a-b645-356f0429c719","municipalPoliticalAreaCode":"461c6daa-5bd9-4532-9447-16a2c334d85b"}</ExtraAttributes>
+                <ExtraBillingAttributes>
+                    <LegalId/>
+                    <FiscalPerson/>
+                    <DocumentType/>
+                    <ReceiverRegion/>
+                    <ReceiverAddress/>
+                    <ReceiverPostcode>-</ReceiverPostcode>
+                    <ReceiverLegalName/>
+                    <ReceiverMunicipality/>
+                    <ReceiverTypeRegimen/>
+                    <CustomerVerifierDigit/>
+                    <ReceiverPhonenumber/>
+                    <ReceiverEmail/>
+                    <ReceiverLocality/>
+                </ExtraBillingAttributes>
+                <InvoiceRequired>false</InvoiceRequired>
+                <OperatorCode>facl</OperatorCode>
+                <ShippingType>Dropshipping</ShippingType>
+                <GrandTotal>13,980.00</GrandTotal>
+                <ProductTotal>9,990.00</ProductTotal>
+                <TaxAmount>0.00</TaxAmount>
+                <ShippingFeeTotal>3,990.00</ShippingFeeTotal>
+                <ShippingTax>0.00</ShippingTax>
+                <Voucher>0.00</Voucher>
+                <Statuses>
+                    <Status>pending</Status>
+                </Statuses>
+            </Order>
+            <Order>
+                <OrderId>1132695246</OrderId>
+                <CustomerFirstName>Blanca</CustomerFirstName>
+                <CustomerLastName>ALDAZABAL Quispe</CustomerLastName>
+                <OrderNumber>3214925528</OrderNumber>
+                <PaymentMethod>ecommPay</PaymentMethod>
+                <Remarks/>
+                <DeliveryInfo/>
+                <Price>51980.00</Price>
+                <GiftOption>0</GiftOption>
+                <GiftMessage/>
+                <VoucherCode/>
+                <CreatedAt>2025-11-28 22:43:02</CreatedAt>
+                <UpdatedAt>2025-11-28 22:43:06</UpdatedAt>
+                <AddressUpdatedAt>2025-11-28 22:43:02</AddressUpdatedAt>
+                <AddressBilling>
+                    <FirstName>Blanca</FirstName>
+                    <LastName>ALDAZABAL Quispe</LastName>
+                    <Address1>san roman</Address1>
+                    <Address2>4916</Address2>
+                    <Address3>casa</Address3>
+                    <Address4/>
+                    <Address5/>
+                    <CustomerEmail/>
+                    <City>SANTIAGO</City>
+                    <Ward>VITACURA</Ward>
+                    <Region>METROPOLITANA DE SANTIAGO</Region>
+                    <PostCode>13132</PostCode>
+                    <Country>CL</Country>
+                    <Phone/>
+                    <Phone2/>
+                </AddressBilling>
+                <AddressShipping>
+                    <FirstName>Blanca ALDAZABAL Quispe</FirstName>
+                    <LastName>ALDAZABAL Quispe</LastName>
+                    <Phone/>
+                    <Phone2/>
+                    <Address1>san roman</Address1>
+                    <Address2>4916</Address2>
+                    <Address3>casa</Address3>
+                    <Address4/>
+                    <Address5/>
+                    <CustomerEmail/>
+                    <City>SANTIAGO</City>
+                    <Ward>VITACURA</Ward>
+                    <Region>METROPOLITANA DE SANTIAGO</Region>
+                    <Country>CL</Country>
+                    <PostCode/>
+                    <Latitude/>
+                    <Longitude/>
+                </AddressShipping>
+                <NationalRegistrationNumber>24180046-6</NationalRegistrationNumber>
+                <ItemsCount>2</ItemsCount>
+                <PromisedShippingTime>2025-12-01 15:59:00</PromisedShippingTime>
+                <ExtraAttributes>{"itemId":"1","deliveryOrderGroupId":"149221797563","originNode":"b477722f-b3f0-4bde-b481-7fe4f20ac11f","originNodeType":"SELLER","cityPoliticalAreaCode":"2010ac8b-eb1c-4ef2-b469-29e4a07f2cba","statePoliticalAreaCode":"a768f0a2-bb5d-4d51-8cad-03b48b25c4a4","countryPoliticalAreaCode":"c4d77661-939e-487a-b645-356f0429c719","municipalPoliticalAreaCode":"2010ac8b-eb1c-4ef2-b469-29e4a07f2cba"}</ExtraAttributes>
+                <ExtraBillingAttributes>
+                    <LegalId/>
+                    <FiscalPerson/>
+                    <DocumentType/>
+                    <ReceiverRegion/>
+                    <ReceiverAddress/>
+                    <ReceiverPostcode>-</ReceiverPostcode>
+                    <ReceiverLegalName/>
+                    <ReceiverMunicipality/>
+                    <ReceiverTypeRegimen/>
+                    <CustomerVerifierDigit/>
+                    <ReceiverPhonenumber/>
+                    <ReceiverEmail/>
+                    <ReceiverLocality/>
+                </ExtraBillingAttributes>
+                <InvoiceRequired>false</InvoiceRequired>
+                <OperatorCode>facl</OperatorCode>
+                <ShippingType>Dropshipping</ShippingType>
+                <GrandTotal>51,980.00</GrandTotal>
+                <ProductTotal>51,980.00</ProductTotal>
+                <TaxAmount>0.00</TaxAmount>
+                <ShippingFeeTotal>0.00</ShippingFeeTotal>
+                <ShippingTax>0.00</ShippingTax>
+                <Voucher>0.00</Voucher>
+                <Statuses>
+                    <Status>pending</Status>
+                </Statuses>
+            </Order>
+            <Order>
+                <OrderId>1132691693</OrderId>
+                <CustomerFirstName>carolina</CustomerFirstName>
+                <CustomerLastName>ruiz coloma</CustomerLastName>
+                <OrderNumber>3214922410</OrderNumber>
+                <PaymentMethod>ecommPay</PaymentMethod>
+                <Remarks/>
+                <DeliveryInfo/>
+                <Price>26990.00</Price>
+                <GiftOption>0</GiftOption>
+                <GiftMessage/>
+                <VoucherCode/>
+                <CreatedAt>2025-11-28 22:38:14</CreatedAt>
+                <UpdatedAt>2025-11-28 22:38:16</UpdatedAt>
+                <AddressUpdatedAt>2025-11-28 22:38:14</AddressUpdatedAt>
+                <AddressBilling>
+                    <FirstName>carolina</FirstName>
+                    <LastName>ruiz coloma</LastName>
+                    <Address1>2 Oriente</Address1>
+                    <Address2>93</Address2>
+                    <Address3/>
+                    <Address4/>
+                    <Address5/>
+                    <CustomerEmail/>
+                    <City>VIÑA DEL MAR</City>
+                    <Ward>Viña del Mar</Ward>
+                    <Region>Valparaíso</Region>
+                    <PostCode>05109</PostCode>
+                    <Country>CL</Country>
+                    <Phone/>
+                    <Phone2/>
+                </AddressBilling>
+                <AddressShipping>
+                    <FirstName>carolina ruiz coloma</FirstName>
+                    <LastName>ruiz coloma</LastName>
+                    <Phone/>
+                    <Phone2/>
+                    <Address1>2 Oriente</Address1>
+                    <Address2>93</Address2>
+                    <Address3/>
+                    <Address4/>
+                    <Address5/>
+                    <CustomerEmail/>
+                    <City>VIÑA DEL MAR</City>
+                    <Ward>Viña del Mar</Ward>
+                    <Region>Valparaíso</Region>
+                    <Country>CL</Country>
+                    <PostCode/>
+                    <Latitude/>
+                    <Longitude/>
+                </AddressShipping>
+                <NationalRegistrationNumber>15082209-2</NationalRegistrationNumber>
+                <ItemsCount>1</ItemsCount>
+                <PromisedShippingTime>2025-12-01 15:59:00</PromisedShippingTime>
+                <ExtraAttributes>{"itemId":"1","deliveryOrderGroupId":"149221793409","originNode":"b477722f-b3f0-4bde-b481-7fe4f20ac11f","originNodeType":"SELLER","cityPoliticalAreaCode":"c35e46b8-49c6-41e4-a470-ecfbeff31c5d","statePoliticalAreaCode":"48b4a271-8bc0-465b-bb6f-381b943ae624","countryPoliticalAreaCode":"c4d77661-939e-487a-b645-356f0429c719","municipalPoliticalAreaCode":"c35e46b8-49c6-41e4-a470-ecfbeff31c5d"}</ExtraAttributes>
+                <ExtraBillingAttributes>
+                    <LegalId/>
+                    <FiscalPerson/>
+                    <DocumentType/>
+                    <ReceiverRegion/>
+                    <ReceiverAddress/>
+                    <ReceiverPostcode>-</ReceiverPostcode>
+                    <ReceiverLegalName/>
+                    <ReceiverMunicipality/>
+                    <ReceiverTypeRegimen/>
+                    <CustomerVerifierDigit/>
+                    <ReceiverPhonenumber/>
+                    <ReceiverEmail/>
+                    <ReceiverLocality/>
+                </ExtraBillingAttributes>
+                <InvoiceRequired>false</InvoiceRequired>
+                <OperatorCode>facl</OperatorCode>
+                <ShippingType>Dropshipping</ShippingType>
+                <GrandTotal>26,990.00</GrandTotal>
+                <ProductTotal>26,990.00</ProductTotal>
+                <TaxAmount>0.00</TaxAmount>
+                <ShippingFeeTotal>0.00</ShippingFeeTotal>
+                <ShippingTax>0.00</ShippingTax>
+                <Voucher>0.00</Voucher>
+                <Statuses>
+                    <Status>pending</Status>
+                </Statuses>
+            </Order>
+            <Order>
+                <OrderId>1132654067</OrderId>
+                <CustomerFirstName>Mari</CustomerFirstName>
+                <CustomerLastName>Rioseco</CustomerLastName>
+                <OrderNumber>3214890351</OrderNumber>
+                <PaymentMethod>ecommPay</PaymentMethod>
+                <Remarks/>
+                <DeliveryInfo/>
+                <Price>16980.00</Price>
+                <GiftOption>0</GiftOption>
+                <GiftMessage/>
+                <VoucherCode/>
+                <CreatedAt>2025-11-28 21:48:35</CreatedAt>
+                <UpdatedAt>2025-11-28 21:48:38</UpdatedAt>
+                <AddressUpdatedAt>2025-11-28 21:48:35</AddressUpdatedAt>
+                <AddressBilling>
+                    <FirstName>Mari</FirstName>
+                    <LastName>Rioseco</LastName>
+                    <Address1>Avenida rica aventura</Address1>
+                    <Address2>10701</Address2>
+                    <Address3>1906 edificio alerce</Address3>
+                    <Address4/>
+                    <Address5/>
+                    <CustomerEmail/>
+                    <City>ANTOFAGASTA</City>
+                    <Ward>ANTOFAGASTA - ANTOFAGASTA</Ward>
+                    <Region>ANTOFAGASTA</Region>
+                    <PostCode>02101</PostCode>
+                    <Country>CL</Country>
+                    <Phone/>
+                    <Phone2/>
+                </AddressBilling>
+                <AddressShipping>
+                    <FirstName>Mari Rioseco</FirstName>
+                    <LastName>Rioseco</LastName>
+                    <Phone/>
+                    <Phone2/>
+                    <Address1>Avenida rica aventura</Address1>
+                    <Address2>10701</Address2>
+                    <Address3>1906 edificio alerce</Address3>
+                    <Address4/>
+                    <Address5/>
+                    <CustomerEmail/>
+                    <City>ANTOFAGASTA</City>
+                    <Ward>ANTOFAGASTA - ANTOFAGASTA</Ward>
+                    <Region>ANTOFAGASTA</Region>
+                    <Country>CL</Country>
+                    <PostCode/>
+                    <Latitude/>
+                    <Longitude/>
+                </AddressShipping>
+                <NationalRegistrationNumber>18192376-8</NationalRegistrationNumber>
+                <ItemsCount>1</ItemsCount>
+                <PromisedShippingTime>2025-12-03 15:59:00</PromisedShippingTime>
+                <ExtraAttributes>{"itemId":"1","deliveryOrderGroupId":"149221749523","originNode":"b477722f-b3f0-4bde-b481-7fe4f20ac11f","originNodeType":"SELLER","cityPoliticalAreaCode":"e3bc0ac5-4aab-4980-a3c8-c83078bc9f2a","statePoliticalAreaCode":"70b1febe-fd2c-4ae7-bdb6-167976826b1a","countryPoliticalAreaCode":"c4d77661-939e-487a-b645-356f0429c719","municipalPoliticalAreaCode":"e3bc0ac5-4aab-4980-a3c8-c83078bc9f2a"}</ExtraAttributes>
+                <ExtraBillingAttributes>
+                    <LegalId/>
+                    <FiscalPerson/>
+                    <DocumentType/>
+                    <ReceiverRegion/>
+                    <ReceiverAddress/>
+                    <ReceiverPostcode>-</ReceiverPostcode>
+                    <ReceiverLegalName/>
+                    <ReceiverMunicipality/>
+                    <ReceiverTypeRegimen/>
+                    <CustomerVerifierDigit/>
+                    <ReceiverPhonenumber/>
+                    <ReceiverEmail/>
+                    <ReceiverLocality/>
+                </ExtraBillingAttributes>
+                <InvoiceRequired>false</InvoiceRequired>
+                <OperatorCode>facl</OperatorCode>
+                <ShippingType>Dropshipping</ShippingType>
+                <GrandTotal>16,980.00</GrandTotal>
+                <ProductTotal>9,990.00</ProductTotal>
+                <TaxAmount>0.00</TaxAmount>
+                <ShippingFeeTotal>6,990.00</ShippingFeeTotal>
+                <ShippingTax>0.00</ShippingTax>
+                <Voucher>0.00</Voucher>
+                <Statuses>
+                    <Status>pending</Status>
+                </Statuses>
+            </Order>
+            <Order>
+                <OrderId>1132638728</OrderId>
+                <CustomerFirstName>susan</CustomerFirstName>
+                <CustomerLastName>castañeda</CustomerLastName>
+                <OrderNumber>3214877204</OrderNumber>
+                <PaymentMethod>ecommPay</PaymentMethod>
+                <Remarks/>
+                <DeliveryInfo/>
+                <Price>14980.00</Price>
+                <GiftOption>0</GiftOption>
+                <GiftMessage/>
+                <VoucherCode/>
+                <CreatedAt>2025-11-28 21:26:16</CreatedAt>
+                <UpdatedAt>2025-11-28 21:26:19</UpdatedAt>
+                <AddressUpdatedAt>2025-11-28 21:26:16</AddressUpdatedAt>
+                <AddressBilling>
+                    <FirstName>susan</FirstName>
+                    <LastName>castañeda</LastName>
+                    <Address1>av domingo santa maria renca</Address1>
+                    <Address2>3839</Address2>
+                    <Address3/>
+                    <Address4/>
+                    <Address5/>
+                    <CustomerEmail/>
+                    <City>SANTIAGO</City>
+                    <Ward>RENCA</Ward>
+                    <Region>METROPOLITANA DE SANTIAGO</Region>
+                    <PostCode>13128</PostCode>
+                    <Country>CL</Country>
+                    <Phone/>
+                    <Phone2/>
+                </AddressBilling>
+                <AddressShipping>
+                    <FirstName>susan castañeda</FirstName>
+                    <LastName>castañeda</LastName>
+                    <Phone/>
+                    <Phone2/>
+                    <Address1>av domingo santa maria renca</Address1>
+                    <Address2>3839</Address2>
+                    <Address3/>
+                    <Address4/>
+                    <Address5/>
+                    <CustomerEmail/>
+                    <City>SANTIAGO</City>
+                    <Ward>RENCA</Ward>
+                    <Region>METROPOLITANA DE SANTIAGO</Region>
+                    <Country>CL</Country>
+                    <PostCode/>
+                    <Latitude/>
+                    <Longitude/>
+                </AddressShipping>
+                <NationalRegistrationNumber>23043762-9</NationalRegistrationNumber>
+                <ItemsCount>1</ItemsCount>
+                <PromisedShippingTime>2025-12-03 15:59:00</PromisedShippingTime>
+                <ExtraAttributes>{"itemId":"1","deliveryOrderGroupId":"149221731693","originNode":"b477722f-b3f0-4bde-b481-7fe4f20ac11f","originNodeType":"SELLER","cityPoliticalAreaCode":"26899fb9-ad18-474d-be56-86b90a1a9a04","statePoliticalAreaCode":"a768f0a2-bb5d-4d51-8cad-03b48b25c4a4","countryPoliticalAreaCode":"c4d77661-939e-487a-b645-356f0429c719","municipalPoliticalAreaCode":"26899fb9-ad18-474d-be56-86b90a1a9a04"}</ExtraAttributes>
+                <ExtraBillingAttributes>
+                    <LegalId/>
+                    <FiscalPerson/>
+                    <DocumentType/>
+                    <ReceiverRegion/>
+                    <ReceiverAddress/>
+                    <ReceiverPostcode>-</ReceiverPostcode>
+                    <ReceiverLegalName/>
+                    <ReceiverMunicipality/>
+                    <ReceiverTypeRegimen/>
+                    <CustomerVerifierDigit/>
+                    <ReceiverPhonenumber/>
+                    <ReceiverEmail/>
+                    <ReceiverLocality/>
+                </ExtraBillingAttributes>
+                <InvoiceRequired>false</InvoiceRequired>
+                <OperatorCode>facl</OperatorCode>
+                <ShippingType>Dropshipping</ShippingType>
+                <GrandTotal>14,980.00</GrandTotal>
+                <ProductTotal>10,990.00</ProductTotal>
+                <TaxAmount>0.00</TaxAmount>
+                <ShippingFeeTotal>3,990.00</ShippingFeeTotal>
+                <ShippingTax>0.00</ShippingTax>
+                <Voucher>0.00</Voucher>
+                <Statuses>
+                    <Status>pending</Status>
+                </Statuses>
+            </Order>
+        </Orders>
+    </Body>
+</SuccessResponse>
+
