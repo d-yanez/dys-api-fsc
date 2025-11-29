@@ -82,4 +82,108 @@ export class OrderRepositorySellerCenter implements OrderRepository {
 
     return finalOrder;
   }
+
+  async getOrdersByStatus(statusFilter: string): Promise<Order[]> {
+    const { url } = buildSignedUrl({
+      Action: 'GetOrders',
+      Status: statusFilter
+    });
+
+    const { status, body } = await httpGet(url);
+
+    if (status !== 200) {
+      logger.error(
+        { status, bodySnippet: body.slice(0, 300) },
+        '❌ Non-200 response from Seller Center GetOrders'
+      );
+      throw new Error(`SellerCenter GetOrders HTTP ${status}`);
+    }
+
+    const format = (env.scFormat ?? 'XML').toUpperCase();
+
+    let ordersNode: any;
+
+    try {
+      if (format === 'JSON') {
+        const parsedJson = JSON.parse(body) as any;
+        ordersNode = parsedJson?.SuccessResponse?.Body?.Orders?.Order;
+      } else {
+        const parsedXml = this.xmlParser.parse(body) as any;
+        ordersNode = parsedXml?.SuccessResponse?.Body?.Orders?.Order;
+      }
+
+      if (!ordersNode) {
+        logger.warn(
+          { format, bodySnippet: body.slice(0, 200) },
+          '⚠️ Orders not found with primary parser for GetOrders, trying fallback'
+        );
+
+        if (format === 'JSON') {
+          const parsedXml = this.xmlParser.parse(body) as any;
+          ordersNode = parsedXml?.SuccessResponse?.Body?.Orders?.Order;
+        } else {
+          const parsedJson = JSON.parse(body) as any;
+          ordersNode = parsedJson?.SuccessResponse?.Body?.Orders?.Order;
+        }
+      }
+    } catch (err: any) {
+      logger.error(
+        {
+          err: err?.message ?? err,
+          bodySnippet: body.slice(0, 500)
+        },
+        '❌ Failed to parse Seller Center GetOrders response (JSON/XML)'
+      );
+      throw new Error(
+        'Failed to parse Seller Center GetOrders response (JSON/XML). Revisa SC_FORMAT o la respuesta de la API.'
+      );
+    }
+
+    if (!ordersNode) {
+      logger.error(
+        { bodySnippet: body.slice(0, 500) },
+        '❌ No Orders data in Seller Center GetOrders response'
+      );
+      throw new Error('Orders not found in Seller Center GetOrders response');
+    }
+
+    const ordersArray = Array.isArray(ordersNode)
+      ? ordersNode
+      : [ordersNode];
+
+    const normalizeStatus = (value: unknown): string | null => {
+      if (value === null || value === undefined) {
+        return null;
+      }
+      return String(value).toLowerCase();
+    };
+
+    const desiredStatus = statusFilter.toLowerCase();
+
+    const filteredOrders = ordersArray.filter((o: any) => {
+      const primaryStatus = o.Statuses?.Status ?? o.Status;
+
+      if (Array.isArray(primaryStatus)) {
+        return primaryStatus
+          .map((s: any) => normalizeStatus(s))
+          .includes(desiredStatus);
+      }
+
+      const normalized = normalizeStatus(primaryStatus);
+      return normalized === desiredStatus;
+    });
+
+    const result: Order[] = filteredOrders.map((o: any): Order => {
+      const orderId = String(o.OrderId ?? '');
+
+      const finalOrder: Order = {
+        orderId,
+        raw: o
+      };
+
+      return finalOrder;
+    });
+
+    return result;
+  }
 }

@@ -8,6 +8,7 @@ import { orderItemsRouter } from './routes/orderItemsRoutes';
 import { productRouter } from './routes/productRoutes';
 import { documentRouter } from './routes/documentRoutes';
 import { applyPartialResponse } from './middlewares/partialResponse';
+import { ordersRouter } from './routes/ordersRoutes';
 
 const app = express();
 
@@ -61,8 +62,9 @@ app.get('/health', (_req, res) => {
 app.use(apiKeyAuth);
 app.use('/order', orderRouter);
 app.use('/orderItems', orderItemsRouter);
-app.use("/sku", productRouter);
-app.use("/label", documentRouter); // quedará: GET /label/order/:orderId
+app.use('/sku', productRouter);
+app.use('/label', documentRouter); // quedará: GET /label/order/:orderId
+app.use('/orders', ordersRouter);
 
 app.listen(env.port, () => {
   logger.info({ port: env.port }, '🚀 HTTP server listening');
