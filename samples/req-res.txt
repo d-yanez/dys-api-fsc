@@ -513,3 +513,7 @@
     </Body>
 </SuccessResponse>
 
+
+
+#curl -X GET "http://localhost:8080/sku/1750645597?fields=sku,name,price,stock,quantity,images,status" \
+  -H "x-api-key: wz53AkZpCTyuXHWajnO1MSkc8OOwkTIG" \

@@ -12,6 +12,21 @@ export class OrderController {
       const order = await this.getOrderByIdUseCase.execute(orderId);
       const o = order.raw;
 
+      if (process.env.DEBUG_SHAPE === 'true') {
+        logger.info(
+          {
+            scVersion: process.env.SC_VERSION,
+            orderKeys: Object.keys(o || {}),
+            itemsCount: o?.ItemsCount,
+            warehouse: o?.Warehouse,
+            warehouseKeys: Array.isArray(o?.Warehouse)
+              ? Object.keys(o.Warehouse[0] || {})
+              : Object.keys(o?.Warehouse || {})
+          },
+          '🔎 GetOrder raw shape (debug)'
+        );
+      }
+
       // Parseamos ExtraAttributes si viene en string JSON para que no falle
       let extraAttributes: any = null;
       if (typeof o.ExtraAttributes === 'string' && o.ExtraAttributes.trim() !== '') {
@@ -47,6 +62,13 @@ export class OrderController {
 
         shippingAddress: o.AddressShipping ?? null,
         billingAddress: o.AddressBilling ?? null,
+
+        warehouse: o.Warehouse
+          ? {
+              facilityId: o.Warehouse.FacilityId ?? null,
+              sellerWarehouseId: o.Warehouse.SellerWarehouseId ?? null
+            }
+          : null,
 
         extraAttributes
       };
