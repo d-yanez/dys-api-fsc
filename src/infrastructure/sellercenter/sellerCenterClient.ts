@@ -42,9 +42,27 @@ export function buildSignedUrl(params: BuildSignedUrlParams): { url: string } {
     .update(sorted)
     .digest('hex');
 
-  const url = `${env.scEndpoint}/?${sorted}&Signature=${signature}`;
+  const unsignedUrl = `${env.scEndpoint}/?${sorted}`;
+  const url = `${unsignedUrl}&Signature=${signature}`;
+
+  if (process.env.DEBUG_SC_REQUESTS === 'true') {
+    logger.info(
+      {
+        action: baseParams.Action,
+        version: baseParams.Version,
+        format: baseParams.Format,
+        orderId: baseParams.OrderId,
+        url: unsignedUrl
+      },
+      '🔎 Seller Center request (unsigned)'
+    );
+  }
 
   return { url };
+}
+
+function stripSignature(url: string): string {
+  return url.replace(/([?&])Signature=[^&]+&?/, '$1').replace(/[?&]$/, '');
 }
 
 export async function httpGet(url: string): Promise<{ status: number; body: string }> {
@@ -64,7 +82,14 @@ export async function httpGet(url: string): Promise<{ status: number; body: stri
         let data = '';
         res.on('data', (chunk) => (data += chunk));
         res.on('end', () => {
-          resolve({ status: res.statusCode ?? 0, body: data });
+          const status = res.statusCode ?? 0;
+          if (status !== 200 && process.env.DEBUG_SC_REQUESTS === 'true') {
+            logger.warn(
+              { status, bodySnippet: data.slice(0, 300), url: stripSignature(url) },
+              '⚠️ Seller Center non-200 response'
+            );
+          }
+          resolve({ status, body: data });
         });
       }
     );
@@ -94,7 +119,14 @@ export async function httpPost(url: string): Promise<{ status: number; body: str
         let data = '';
         res.on('data', (chunk) => (data += chunk));
         res.on('end', () => {
-          resolve({ status: res.statusCode ?? 0, body: data });
+          const status = res.statusCode ?? 0;
+          if (status !== 200 && process.env.DEBUG_SC_REQUESTS === 'true') {
+            logger.warn(
+              { status, bodySnippet: data.slice(0, 300), url: stripSignature(url) },
+              '⚠️ Seller Center non-200 response'
+            );
+          }
+          resolve({ status, body: data });
         });
       }
     );

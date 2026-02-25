@@ -19,6 +19,7 @@ export class OrderItemRepositorySellerCenter implements OrderItemRepository {
   async getOrderItemsByOrderId(orderId: string): Promise<OrderItem[]> {
     const { url } = buildSignedUrl({
       Action: 'GetOrderItems',
+      Version: '1.0',
       OrderId: orderId,
     });
 
@@ -68,6 +69,16 @@ export class OrderItemRepositorySellerCenter implements OrderItemRepository {
 
     const itemsArray = Array.isArray(itemsNode) ? itemsNode : [itemsNode];
 
+    if (process.env.DEBUG_SHAPE === 'true') {
+      const firstItem = itemsArray[0];
+      logger.info(
+        {
+          orderItemKeys: Object.keys(firstItem || {})
+        },
+        '🔎 GetOrderItems raw shape (debug)'
+      );
+    }
+
     const result: OrderItem[] = itemsArray.map((it: any): OrderItem => {
       // ExtraAttributes puede venir como JSON string
       let extraAttrs: any = null;
@@ -79,7 +90,12 @@ export class OrderItemRepositorySellerCenter implements OrderItemRepository {
         }
       }
 
-      const quantity = it.Quantity != null ? Number(it.Quantity) : null;
+      // Falabella GetOrderItems no trae Quantity en XML actual
+      const quantityRaw = it.Quantity ?? it.ItemQuantity;
+      const quantity = quantityRaw != null ? Number(quantityRaw) : 1;
+
+      const isProcessable =
+        it.IsProcessable != null ? String(it.IsProcessable) === '1' : null;
 
       // Algunos campos de monto típicos en GetOrderItems: ItemPrice, PaidPrice, ShippingAmount :contentReference[oaicite:1]{index=1}
       const price = it.ItemPrice != null ? Number(it.ItemPrice) : null;
@@ -104,7 +120,7 @@ export class OrderItemRepositorySellerCenter implements OrderItemRepository {
         voucherCode: it.VoucherCode ?? null,
 
         status: it.Status ?? null,
-        isProcessable: it.isProcessable ?? null,
+        isProcessable,
         shippingType: it.ShippingType ?? null,
         shipmentProvider: it.ShipmentProvider ?? null,
         shippingProviderType: it.ShippingProviderType ?? null,
@@ -140,6 +156,7 @@ export class OrderItemRepositorySellerCenter implements OrderItemRepository {
 
     const { url } = buildSignedUrl({
       Action: 'SetStatusToPackedByMarketplace',
+      Version: '1.0',
       // Seller Center espera un array serializado como string, por ejemplo: "[135839567,135839568]"
       OrderItemIds: `[${orderItemIds.join(',')}]`
     });

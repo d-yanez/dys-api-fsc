@@ -17,7 +17,7 @@ export interface OrderItem {
   voucherCode?: string | null;
 
   status?: string | null;
-  isProcessable?: string | null; // "0" | "1"
+  isProcessable?: boolean | null;
   shippingType?: string | null;
   shipmentProvider?: string | null;
   shippingProviderType?: string | null;
