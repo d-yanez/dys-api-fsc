@@ -18,6 +18,7 @@ export class ProductRepositorySellerCenter implements ProductRepository {
   async getProductBySku(sku: string): Promise<Product | null> {
     const { url } = buildSignedUrl({
       Action: "GetProducts",
+      Version: "1.0",
       SkuSellerList: sku,
     });
 
@@ -61,7 +62,12 @@ export class ProductRepositorySellerCenter implements ProductRepository {
 
     if (!productsNode) {
       logger.warn(
-        { sku, bodySnippet: body.slice(0, 400) },
+        {
+          sku,
+          action: "GetProducts",
+          requestedVersion: "1.0",
+          bodySnippet: body.slice(0, 400)
+        },
         "⚠️ No Product data in Seller Center response"
       );
       return null;
