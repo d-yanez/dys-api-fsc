@@ -101,19 +101,38 @@ export async function httpGet(url: string): Promise<{ status: number; body: stri
   });
 }
 
-export async function httpPost(url: string): Promise<{ status: number; body: string }> {
+export async function httpPost(
+  url: string,
+  body?: string,
+  extraHeaders?: Record<string, string>
+): Promise<{ status: number; body: string }> {
   logger.debug({ url }, '🌐 Calling Seller Center POST');
   return new Promise((resolve, reject) => {
     const u = new URL(url);
+    const requestBody = body ?? '';
+    const headers: Record<string, string> = {
+      'User-Agent': env.scUserAgent
+    };
+
+    if (requestBody.length > 0) {
+      headers['Content-Type'] = 'application/xml';
+      headers['Accept'] = 'application/xml';
+      headers['Content-Length'] = String(Buffer.byteLength(requestBody));
+    }
+
+    if (extraHeaders) {
+      for (const [key, value] of Object.entries(extraHeaders)) {
+        headers[key] = value;
+      }
+    }
+
     const req = https.request(
       {
         method: 'POST',
         protocol: u.protocol,
         hostname: u.hostname,
         path: u.pathname + u.search,
-        headers: {
-          'User-Agent': env.scUserAgent
-        }
+        headers
       },
       (res) => {
         let data = '';
@@ -136,6 +155,9 @@ export async function httpPost(url: string): Promise<{ status: number; body: str
       reject(err);
     });
 
+    if (requestBody.length > 0) {
+      req.write(requestBody);
+    }
     req.end();
   });
 }

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/interfaces/http/server.ts",
     "build": "rimraf dist && tsc",
-    "start": "node dist/interfaces/http/server.js"
+    "start": "node dist/interfaces/http/server.js",
+    "test": "npm run build && node --test dist/tests"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

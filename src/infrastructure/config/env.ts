@@ -12,6 +12,7 @@ export const env = {
   scUserId: process.env.SC_USER_ID ?? '',
   scApiKey: process.env.SC_API_KEY ?? '',
   scVersion: process.env.SC_VERSION ?? '1.0',
+  scGscFacilityId: process.env.SC_GSC_FACILITY_ID ?? '',
   // ⚠️ Recomendado: usar JSON para simplificar el parsing.
   scFormat: process.env.SC_FORMAT ?? 'JSON',
   scUserAgent: process.env.SC_USER_AGENT ?? 'DYSHOPNOW/dys-api-fsc',
@@ -24,4 +25,8 @@ if (!env.scUserId || !env.scApiKey) {
   // y es mejor morir temprano que fallar en runtime.
   // En local también te avisará al levantar.
   console.error('❌ Faltan variables de entorno: SC_USER_ID o SC_API_KEY');
+}
+
+if (!env.scGscFacilityId) {
+  console.error('❌ Falta variable de entorno requerida para stock: SC_GSC_FACILITY_ID');
 }

@@ -226,3 +226,42 @@ Respetar la separación de capas.
 🧠 13. Regla final
 
 No mezclar capas. No duplicar lógica. No introducir lógica de negocio en controllers o infraestructura. Todo flujo de negocio va en la capa application.
+---
+
+## 14. Endpoint Versionado de Stock (`/v1/stock/:sku`)
+
+Objetivo:
+- Consultar stock por `sellerSku` en Falabella (`GetStock`) y exponer JSON efectivo.
+
+Contrato HTTP:
+- `GET /v1/stock/:sku`
+
+Respuesta:
+- `sku`
+- `totalQuantity`
+- `warehouses[]` con `sellerWarehouseId`, `facilityId`, `sellerSku`, `quantity`.
+
+Reglas de versionado FSC:
+- Para `GetStock`, enviar `Version=1.0` explícita en el request firmado.
+
+Mapeo de errores FSC:
+- Si FSC retorna `ErrorResponse` con `ErrorCode=1001` y mensaje `Invalid Seller Sku List...`, responder `404`.
+- Errores upstream no mapeados: `502`.
+- Errores internos inesperados: `500`.
+
+Testing mínimo obligatorio:
+- Unit tests de parseo XML (`SuccessResponse` y `ErrorResponse`).
+- Unit tests de controller (`400/404/502`).
+- Smoke test HTTP del endpoint sin pegar a FSC real.
+
+Update stock:
+- `PUT /v1/stock`
+- Body JSON: `sellerSku`, `quantity`.
+- En infraestructura se transforma a XML `UpdateStock`.
+- `GSCFacilityId` debe salir de `SC_GSC_FACILITY_ID` (env obligatoria).
+- Respuesta efectiva: `success`, `status`, `action`, `sellerSku`, `quantity`, `facilityId`, `feedId`.
+
+Feed status:
+- `GET /v1/feed/status/:feedId` (alias: `GET /v1/fee/status/:feedId`)
+- Consulta `FeedStatus` en Falabella con `FeedID`.
+- Respuesta efectiva: `success`, `feedId`, `status`, `action`, `creationDate`, `updatedDate`, `source`, `totalRecords`, `processedRecords`, `failedRecords`.

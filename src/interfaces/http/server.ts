@@ -9,6 +9,9 @@ import { productRouter } from './routes/productRoutes';
 import { documentRouter } from './routes/documentRoutes';
 import { applyPartialResponse } from './middlewares/partialResponse';
 import { ordersRouter } from './routes/ordersRoutes';
+import { stockV1Router } from './routes/stockV1Routes';
+import { stockUpdateV1Router } from './routes/stockUpdateV1Routes';
+import { feedStatusV1Router } from './routes/feedStatusV1Routes';
 
 const app = express();
 
@@ -65,6 +68,10 @@ app.use('/orderItems', orderItemsRouter);
 app.use('/sku', productRouter);
 app.use('/label', documentRouter); // quedará: GET /label/order/:orderId
 app.use('/orders', ordersRouter);
+app.use('/v1/stock', stockV1Router);
+app.use('/v1/stock', stockUpdateV1Router);
+app.use('/v1/feed', feedStatusV1Router);
+app.use('/v1/fee', feedStatusV1Router);
 
 app.listen(env.port, () => {
   logger.info({ port: env.port }, '🚀 HTTP server listening');
