@@ -31,6 +31,7 @@ export class DocumentRepositorySellerCenter implements DocumentRepository {
 
     const { url } = buildSignedUrl({
       Action: "GetDocument",
+      Version: "1.0",
       DocumentType: "shippingParcel",
       OrderItemIds: orderItemIdsParam,
     });
