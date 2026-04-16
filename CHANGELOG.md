@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-04-15
+
+### Added
+- New internal endpoint `POST /v1/status/ready-to-ship` to call Seller Center `SetStatusToReadyToShip` with JSON input (`orderItemIds`, `packageId`) and effective JSON output.
+- Route wiring for `/v1/status/ready-to-ship` in HTTP server.
+- New tests for ready-to-ship flow (use case, repository mapping, controller, route smoke).
+
+### Changed
+- Added Seller Center adapter for ready-to-ship using POST `application/x-www-form-urlencoded` with signed URL params and `Format=JSON`.
+- Reused existing signing/timestamp/user credentials flow without introducing DB dependencies.
+
 ## 2026-03-27
 
 ### Added

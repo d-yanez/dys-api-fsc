@@ -265,3 +265,12 @@ Feed status:
 - `GET /v1/feed/status/:feedId` (alias: `GET /v1/fee/status/:feedId`)
 - Consulta `FeedStatus` en Falabella con `FeedID`.
 - Respuesta efectiva: `success`, `feedId`, `status`, `action`, `creationDate`, `updatedDate`, `source`, `totalRecords`, `processedRecords`, `failedRecords`.
+
+Ready to ship status:
+- `POST /v1/status/ready-to-ship`
+- Body JSON: `orderItemIds[]`, `packageId`.
+- No consulta Mongo/DB ni resuelve datos aguas arriba; solo valida, firma, invoca Seller Center y transforma respuesta.
+- Integración con `SetStatusToReadyToShip` usando POST `application/x-www-form-urlencoded` y `Format=JSON`.
+- Respuesta efectiva:
+  - éxito: `ok`, `action`, `purchaseOrderId`, `purchaseOrderNumber`
+  - error: `ok`, `action`, `errorCode`, `errorMessage`

@@ -146,6 +146,47 @@ Códigos esperados:
 - `502`: error upstream Falabella
 - `500`: error interno no controlado
 
+### POST `/v1/status/ready-to-ship`
+
+Marca una orden como **Ready to Ship** en Falabella (`SetStatusToReadyToShip`).
+
+Body:
+
+```json
+{
+  "orderItemIds": [163398544],
+  "packageId": "PKG00002CZXL5"
+}
+```
+
+Respuesta `200`:
+
+```json
+{
+  "ok": true,
+  "action": "SetStatusToReadyToShip",
+  "purchaseOrderId": "1150140518",
+  "purchaseOrderNumber": "3231960534"
+}
+```
+
+Error funcional FSC `400`:
+
+```json
+{
+  "ok": false,
+  "action": "SetStatusToReadyToShip",
+  "errorCode": "20",
+  "errorMessage": "E020: \"163398544\" Invalid Order Item ID"
+}
+```
+
+Códigos esperados:
+- `200`: operación aceptada por FSC
+- `400`: validación local o error funcional FSC
+- `502`: error upstream Falabella
+- `500`: error interno no controlado
+
 ## Tests
 
 ```bash
