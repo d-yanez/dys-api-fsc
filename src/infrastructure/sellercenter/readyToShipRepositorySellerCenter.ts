@@ -20,14 +20,18 @@ export class ReadyToShipRepositorySellerCenter implements ReadyToShipRepository 
   }): Promise<ReadyToShipResult> {
     const { orderItemIds, packageId } = input;
 
+    const serializedOrderItemIds = `[${orderItemIds.join(',')}]`;
+
     const { url } = buildSignedUrl({
       Action: 'SetStatusToReadyToShip',
       Version: '1.0',
-      Format: 'JSON'
+      Format: 'JSON',
+      OrderItemIds: serializedOrderItemIds,
+      PackageId: packageId
     });
 
     const formBody = new URLSearchParams({
-      OrderItemIds: `[${orderItemIds.join(',')}]`,
+      OrderItemIds: serializedOrderItemIds,
       PackageId: packageId
     }).toString();
 

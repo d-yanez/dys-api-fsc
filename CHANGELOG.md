@@ -48,3 +48,4 @@
 ### Notes
 - This was a surgical change scoped only to the product lookup flow.
 - No changes were made to other proxy endpoints (`/order`, `/orders`, `/orderItems`, `/label`) or shared Seller Center client/environment config.
+- Align ready-to-ship request with Seller Center/Postman behavior by signing `OrderItemIds` and `PackageId` in the URL and also sending them in the x-www-form-urlencoded body.

@@ -7,10 +7,13 @@ import {
 import * as sellerCenterClient from '../infrastructure/sellercenter/sellerCenterClient';
 
 const originalHttpPost = sellerCenterClient.httpPost;
+const originalBuildSignedUrl = sellerCenterClient.buildSignedUrl;
 
 test.afterEach(() => {
   (sellerCenterClient as unknown as { httpPost: typeof sellerCenterClient.httpPost }).httpPost =
     originalHttpPost;
+  (sellerCenterClient as unknown as { buildSignedUrl: typeof sellerCenterClient.buildSignedUrl }).buildSignedUrl =
+    originalBuildSignedUrl;
 });
 
 test('ReadyToShipRepositorySellerCenter maps SuccessResponse JSON', async () => {
@@ -98,4 +101,50 @@ test('ReadyToShipRepositorySellerCenter throws on non-200 upstream response', as
       }),
     { message: 'SellerCenter SetStatusToReadyToShip HTTP 500' }
   );
+});
+
+
+test('ReadyToShipRepositorySellerCenter signs url with OrderItemIds and PackageId', async () => {
+  let capturedParams: sellerCenterClient.BuildSignedUrlParams | undefined;
+
+  (sellerCenterClient as unknown as { buildSignedUrl: typeof sellerCenterClient.buildSignedUrl }).buildSignedUrl =
+    (params) => {
+      capturedParams = params;
+      return { url: 'https://sellercenter.example.com/?signed=1' };
+    };
+
+  (sellerCenterClient as unknown as { httpPost: typeof sellerCenterClient.httpPost }).httpPost =
+    async (_url, body) => {
+      assert.equal(body, 'OrderItemIds=%5B163398544%5D&PackageId=PKG00002CZXL5');
+      return {
+        status: 200,
+        body: JSON.stringify({
+          SuccessResponse: {
+            Head: { RequestAction: 'SetStatusToReadyToShip' },
+            Body: {
+              Orders: {
+                Order: {
+                  PurchaseOrderId: '1150140518',
+                  PurchaseOrderNumber: '3231960534'
+                }
+              }
+            }
+          }
+        })
+      };
+    };
+
+  const repo = new ReadyToShipRepositorySellerCenter();
+  await repo.setStatusToReadyToShip({
+    orderItemIds: ['163398544'],
+    packageId: 'PKG00002CZXL5'
+  });
+
+  assert.deepEqual(capturedParams, {
+    Action: 'SetStatusToReadyToShip',
+    Version: '1.0',
+    Format: 'JSON',
+    OrderItemIds: '[163398544]',
+    PackageId: 'PKG00002CZXL5'
+  });
 });

@@ -159,6 +159,9 @@ Body:
 }
 ```
 
+Nota técnica:
+- El adapter Seller Center firma la URL con `OrderItemIds` y `PackageId` y además los envía en body `application/x-www-form-urlencoded`, alineado con el request validado en Postman para `SetStatusToReadyToShip`.
+
 Respuesta `200`:
 
 ```json
