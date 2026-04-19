@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-04-19
+
+### Added
+- `GET /order/:orderId` ahora expone de forma aditiva:
+  - `invoiceRequired` (boolean)
+  - `financial.{grandTotal,productTotal,taxAmount,shippingFeeTotal}` (números normalizados)
+  - `addressBilling` y `addressShipping` (alias directos para consumo del subscriber ERP).
+
+### Notes
+- Cambio backward-compatible: se mantienen `totals` y el resto del contrato previo.
+
 ## 2026-04-15
 
 ### Added

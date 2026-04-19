@@ -2,6 +2,37 @@ import { Request, Response } from 'express';
 import { GetOrderByIdUseCase } from '../../../application/use-cases/getOrderByIdUseCase';
 import { logger } from '../../../infrastructure/logger/logger';
 
+function normalizeNumber(value: unknown): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const str = String(value).replace(/,/g, '').trim();
+  if (str === '') {
+    return null;
+  }
+  const num = Number(str);
+  return Number.isNaN(num) ? null : num;
+}
+
+function normalizeBoolean(value: unknown): boolean | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const v = value.trim().toLowerCase();
+    if (v === 'true') {
+      return true;
+    }
+    if (v === 'false') {
+      return false;
+    }
+  }
+  return null;
+}
+
 export class OrderController {
   constructor(private readonly getOrderByIdUseCase: GetOrderByIdUseCase) {}
 
@@ -54,6 +85,14 @@ export class OrderController {
           taxAmount: o.TaxAmount ?? null
         },
 
+        invoiceRequired: normalizeBoolean(o.InvoiceRequired),
+        financial: {
+          grandTotal: normalizeNumber(o.GrandTotal ?? o.Price ?? null),
+          productTotal: normalizeNumber(o.ProductTotal ?? null),
+          taxAmount: normalizeNumber(o.TaxAmount ?? null),
+          shippingFeeTotal: normalizeNumber(o.ShippingFeeTotal ?? null)
+        },
+
         customer: {
           firstName: o.CustomerFirstName ?? null,
           lastName: o.CustomerLastName ?? null,
@@ -62,6 +101,8 @@ export class OrderController {
 
         shippingAddress: o.AddressShipping ?? null,
         billingAddress: o.AddressBilling ?? null,
+        addressShipping: o.AddressShipping ?? null,
+        addressBilling: o.AddressBilling ?? null,
 
         warehouse: o.Warehouse
           ? {
