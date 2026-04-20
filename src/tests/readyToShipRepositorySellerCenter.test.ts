@@ -51,6 +51,34 @@ test('ReadyToShipRepositorySellerCenter maps SuccessResponse JSON', async () => 
   });
 });
 
+test('ReadyToShipRepositorySellerCenter treats SuccessResponse without Orders.Order as success', async () => {
+  (sellerCenterClient as unknown as { httpPost: typeof sellerCenterClient.httpPost }).httpPost =
+    async () => ({
+      status: 200,
+      body: JSON.stringify({
+        SuccessResponse: {
+          Head: {
+            RequestAction: 'SetStatusToReadyToShip'
+          },
+          Body: {}
+        }
+      })
+    });
+
+  const repo = new ReadyToShipRepositorySellerCenter();
+  const result = await repo.setStatusToReadyToShip({
+    orderItemIds: ['163398544'],
+    packageId: 'PKG00002CZXL5'
+  });
+
+  assert.deepEqual(result, {
+    ok: true,
+    action: 'SetStatusToReadyToShip',
+    purchaseOrderId: null,
+    purchaseOrderNumber: null
+  });
+});
+
 test('ReadyToShipRepositorySellerCenter maps ErrorResponse JSON to typed error', async () => {
   (sellerCenterClient as unknown as { httpPost: typeof sellerCenterClient.httpPost }).httpPost =
     async () => ({

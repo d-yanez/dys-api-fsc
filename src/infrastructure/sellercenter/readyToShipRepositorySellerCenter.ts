@@ -82,7 +82,20 @@ export class ReadyToShipRepositorySellerCenter implements ReadyToShipRepository 
 
     const orderNode = parsed?.SuccessResponse?.Body?.Orders?.Order;
     if (!orderNode) {
-      throw new Error('Order payload not found in Seller Center SetStatusToReadyToShip response');
+      logger.warn(
+        {
+          orderItemIds,
+          packageId,
+          bodySnippet: body.slice(0, 400)
+        },
+        '⚠️ Seller Center SetStatusToReadyToShip success response without Orders.Order payload'
+      );
+      return {
+        ok: true,
+        action: 'SetStatusToReadyToShip',
+        purchaseOrderId: null,
+        purchaseOrderNumber: null
+      };
     }
 
     return {

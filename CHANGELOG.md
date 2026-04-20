@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-04-20
+
+### Fixed
+- `POST /v1/status/ready-to-ship`: cuando Seller Center responde `SuccessResponse` sin `Body.Orders.Order`, ahora se interpreta como éxito válido (`ok=true`) con `purchaseOrderId/purchaseOrderNumber = null` en lugar de error `500`.
+- Esto evita falsos negativos y reduce reintentos aguas arriba sobre una acción no idempotente.
+
 ## 2026-04-19
 
 ### Added

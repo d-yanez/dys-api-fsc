@@ -185,6 +185,13 @@ Respuesta `200`:
 }
 ```
 
+Nota de robustez:
+- Seller Center puede responder `SuccessResponse` sin `Orders.Order`.
+- En ese caso, este servicio lo considera éxito válido y retorna:
+  - `ok: true`
+  - `purchaseOrderId: null`
+  - `purchaseOrderNumber: null`
+
 Error funcional FSC `400`:
 
 ```json
