@@ -13,6 +13,7 @@ import { stockV1Router } from './routes/stockV1Routes';
 import { stockUpdateV1Router } from './routes/stockUpdateV1Routes';
 import { feedStatusV1Router } from './routes/feedStatusV1Routes';
 import { statusV1Router } from './routes/statusV1Routes';
+import { invoiceV1Router } from './routes/invoiceV1Routes';
 
 const app = express();
 
@@ -74,6 +75,7 @@ app.use('/v1/stock', stockUpdateV1Router);
 app.use('/v1/feed', feedStatusV1Router);
 app.use('/v1/fee', feedStatusV1Router);
 app.use('/v1/status', statusV1Router);
+app.use('/v1/invoices', invoiceV1Router);
 
 app.listen(env.port, () => {
   logger.info({ port: env.port }, '🚀 HTTP server listening');

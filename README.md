@@ -217,3 +217,46 @@ npm test
 
 Registro de smoke tests reales:
 - `docs/SMOKE-TESTS.md`
+
+## POST `/v1/invoices/pdf`
+
+Sube boleta/factura en PDF a Seller Center usando `SetInvoicePDF` (JSON firmado por headers).
+
+Body esperado:
+
+```json
+{
+  "orderItemIds": ["164027299"],
+  "invoiceNumber": "8481",
+  "invoiceDate": "2026-04-22",
+  "invoiceType": "BOLETA",
+  "operatorCode": "FACL",
+  "invoiceDocumentFormat": "pdf",
+  "invoiceDocument": "<base64>"
+}
+```
+
+Respuesta éxito:
+
+```json
+{
+  "ok": true,
+  "action": "SetInvoicePDF",
+  "requestId": "123456789",
+  "alreadyExists": false,
+  "message": "Invoice PDF uploaded"
+}
+```
+
+Caso convergente (`E004 Invoice already exists`):
+
+```json
+{
+  "ok": true,
+  "action": "SetInvoicePDF",
+  "requestId": "123456789",
+  "alreadyExists": true,
+  "message": "Invoice already exists"
+}
+```
+
