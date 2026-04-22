@@ -1,5 +1,6 @@
 import express from 'express';
 import pinoHttp from 'pino-http';
+import type { ErrorRequestHandler } from 'express';
 import { env } from '../../infrastructure/config/env';
 import { logger } from '../../infrastructure/logger/logger';
 import { orderRouter } from './routes/orderRoutes';
@@ -17,7 +18,7 @@ import { invoiceV1Router } from './routes/invoiceV1Routes';
 
 const app = express();
 
-app.use(express.json());
+app.use(express.json({ limit: env.httpJsonBodyLimit }));
 
 app.use(
   pinoHttp({
@@ -77,6 +78,41 @@ app.use('/v1/fee', feedStatusV1Router);
 app.use('/v1/status', statusV1Router);
 app.use('/v1/invoices', invoiceV1Router);
 
+const parseErrorHandler: ErrorRequestHandler = (err, req, res, next) => {
+  if (err && (err as any).type === 'entity.too.large') {
+    logger.warn(
+      {
+        path: req.originalUrl,
+        method: req.method,
+        requestId: req.headers['x-request-id'] ?? undefined,
+        code: 'payload_too_large',
+      },
+      '⚠️ Request body too large'
+    );
+    res.status(413).json({
+      error: {
+        code: 'payload_too_large',
+        message: 'Payload too large for this endpoint',
+      },
+    });
+    return;
+  }
+
+  if (err instanceof SyntaxError && 'body' in err) {
+    res.status(400).json({
+      error: {
+        code: 'invalid_json_body',
+        message: 'Invalid JSON body',
+      },
+    });
+    return;
+  }
+
+  next(err);
+};
+
+app.use(parseErrorHandler);
+
 app.listen(env.port, () => {
-  logger.info({ port: env.port }, '🚀 HTTP server listening');
+  logger.info({ port: env.port, httpJsonBodyLimit: env.httpJsonBodyLimit }, '🚀 HTTP server listening');
 });

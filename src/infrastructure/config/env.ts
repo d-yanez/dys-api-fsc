@@ -6,6 +6,7 @@ export const env = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: Number(process.env.PORT ?? 8080),
   serviceName: process.env.SERVICE_NAME ?? 'dys-api-fsc',
+  httpJsonBodyLimit: process.env.HTTP_JSON_BODY_LIMIT ?? '15mb',
 
   // Seller Center
   scEndpoint: (process.env.SC_ENDPOINT ?? 'https://sellercenter-api.falabella.com').replace(/\/+$/, ''),

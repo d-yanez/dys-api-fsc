@@ -34,6 +34,11 @@ curl -H "x-api-key: xxxxx" \
 
   npm run dev
 
+### Body limit para SetInvoicePDF
+
+- `HTTP_JSON_BODY_LIMIT` (opcional, default: `15mb`)
+- Recomendado para `invoiceDocument` en base64: `15mb` o mayor según tamaño de PDF.
+
 ## Endpoint nuevo: Stock por SKU (v1)
 
 ### GET `/v1/stock/:sku`
@@ -259,4 +264,3 @@ Caso convergente (`E004 Invoice already exists`):
   "message": "Invoice already exists"
 }
 ```
-
