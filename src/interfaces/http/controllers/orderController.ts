@@ -33,6 +33,23 @@ function normalizeBoolean(value: unknown): boolean | null {
   return null;
 }
 
+function firstObject(value: unknown): Record<string, unknown> | null {
+  if (!value) {
+    return null;
+  }
+  if (Array.isArray(value)) {
+    const first = value[0];
+    if (first && typeof first === 'object') {
+      return first as Record<string, unknown>;
+    }
+    return null;
+  }
+  if (typeof value === 'object') {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
 export class OrderController {
   constructor(private readonly getOrderByIdUseCase: GetOrderByIdUseCase) {}
 
@@ -67,6 +84,7 @@ export class OrderController {
           extraAttributes = null;
         }
       }
+      const extraBillingAttributes = firstObject(o.ExtraBillingAttributes);
 
       // 🔹 Respuesta ligera optimizada
       const response = {
@@ -96,7 +114,15 @@ export class OrderController {
         customer: {
           firstName: o.CustomerFirstName ?? null,
           lastName: o.CustomerLastName ?? null,
-          nationalRegistrationNumber: o.NationalRegistrationNumber ?? null
+          nationalRegistrationNumber: o.NationalRegistrationNumber ?? null,
+          legalId: extraBillingAttributes?.LegalId ?? null,
+          fiscalPerson: extraBillingAttributes?.FiscalPerson ?? null,
+          documentType: extraBillingAttributes?.DocumentType ?? null,
+          receiverLegalName: extraBillingAttributes?.ReceiverLegalName ?? null,
+          receiverTypeRegimen: extraBillingAttributes?.ReceiverTypeRegimen ?? null,
+          receiverEmail: extraBillingAttributes?.ReceiverEmail ?? null,
+          receiverAddress: extraBillingAttributes?.ReceiverAddress ?? null,
+          receiverMunicipality: extraBillingAttributes?.ReceiverMunicipality ?? null
         },
 
         shippingAddress: o.AddressShipping ?? null,
@@ -111,7 +137,8 @@ export class OrderController {
             }
           : null,
 
-        extraAttributes
+        extraAttributes,
+        extraBillingAttributes
       };
 
       return res.status(200).json(response);

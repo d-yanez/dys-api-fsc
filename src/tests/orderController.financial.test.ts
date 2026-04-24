@@ -41,7 +41,15 @@ test('OrderController adds invoiceRequired and normalized financial fields', asy
           ShippingFeeTotal: '0.00',
           AddressBilling: { FirstName: 'Maria' },
           AddressShipping: { FirstName: 'Maria' },
-          Statuses: { Status: 'shipped' }
+          Statuses: { Status: 'shipped' },
+          ExtraBillingAttributes: {
+            LegalId: '96912840-3',
+            ReceiverLegalName: 'AQUAGEN CHILE S.A.',
+            ReceiverTypeRegimen: '032110 - CULTIVO Y CRIANZA DE PECES MARINOS',
+            ReceiverEmail: 'yoselin.parra@aquagenchile.cl',
+            ReceiverAddress: 'SAN FRANCISCO 328',
+            ReceiverMunicipality: 'PUERTO VARAS - PUERTO VARAS'
+          }
         }
       };
     }
@@ -63,5 +71,53 @@ test('OrderController adds invoiceRequired and normalized financial fields', asy
   assert.equal(body.financial.shippingFeeTotal, 0);
   assert.deepEqual(body.addressBilling, { FirstName: 'Maria' });
   assert.deepEqual(body.addressShipping, { FirstName: 'Maria' });
+  assert.equal(body.customer.legalId, '96912840-3');
+  assert.equal(body.customer.receiverLegalName, 'AQUAGEN CHILE S.A.');
+  assert.equal(body.customer.receiverTypeRegimen, '032110 - CULTIVO Y CRIANZA DE PECES MARINOS');
+  assert.equal(body.customer.receiverEmail, 'yoselin.parra@aquagenchile.cl');
+  assert.equal(body.customer.receiverAddress, 'SAN FRANCISCO 328');
+  assert.equal(body.customer.receiverMunicipality, 'PUERTO VARAS - PUERTO VARAS');
+  assert.deepEqual(body.extraBillingAttributes, {
+    LegalId: '96912840-3',
+    ReceiverLegalName: 'AQUAGEN CHILE S.A.',
+    ReceiverTypeRegimen: '032110 - CULTIVO Y CRIANZA DE PECES MARINOS',
+    ReceiverEmail: 'yoselin.parra@aquagenchile.cl',
+    ReceiverAddress: 'SAN FRANCISCO 328',
+    ReceiverMunicipality: 'PUERTO VARAS - PUERTO VARAS'
+  });
 });
 
+test('OrderController normalizes extraBillingAttributes when parser returns array', async () => {
+  const controller = new OrderController({
+    async execute() {
+      return {
+        orderId: '1132545695',
+        raw: {
+          OrderId: '1132545695',
+          OrderNumber: '3214796430',
+          Statuses: { Status: 'delivered' },
+          ExtraBillingAttributes: [
+            {
+              LegalId: '96912840-3',
+              ReceiverLegalName: 'AQUAGEN CHILE S.A.'
+            }
+          ]
+        }
+      };
+    }
+  } as any);
+
+  const req = { params: { orderId: '1132545695' } } as any;
+  const res = createMockResponse();
+
+  await controller.getOrderById(req, res as any);
+
+  assert.equal(res.statusCode, 200);
+  const body = res.body as any;
+  assert.equal(body.customer.legalId, '96912840-3');
+  assert.equal(body.customer.receiverLegalName, 'AQUAGEN CHILE S.A.');
+  assert.deepEqual(body.extraBillingAttributes, {
+    LegalId: '96912840-3',
+    ReceiverLegalName: 'AQUAGEN CHILE S.A.'
+  });
+});
