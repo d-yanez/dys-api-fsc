@@ -44,14 +44,14 @@ function buildXmlRequest(input: any): string {
 
 export class CatalogRepositorySellerCenter implements CatalogRepository {
   async getBrands(): Promise<unknown> {
-    const { url } = buildSignedUrl({ Action: 'GetBrands' });
+    const { url } = buildSignedUrl({ Action: 'GetBrands', Version: '1.0' });
     const { status, body } = await httpGet(url);
     if (status !== 200) throw new Error(`SellerCenter GetBrands HTTP ${status}`);
     return parseMaybeJsonOrXml(body);
   }
 
   async getCategoryTree(): Promise<unknown> {
-    const { url } = buildSignedUrl({ Action: 'GetCategoryTree' });
+    const { url } = buildSignedUrl({ Action: 'GetCategoryTree', Version: '1.0' });
     const { status, body } = await httpGet(url);
     if (status !== 200) throw new Error(`SellerCenter GetCategoryTree HTTP ${status}`);
     return parseMaybeJsonOrXml(body);
@@ -59,7 +59,7 @@ export class CatalogRepositorySellerCenter implements CatalogRepository {
 
   async getCategoryAttributes(categoryId: string): Promise<unknown> {
     const category = requiredString(categoryId, 'categoryId');
-    const { url } = buildSignedUrl({ Action: 'GetCategoryAttributes', PrimaryCategory: category });
+    const { url } = buildSignedUrl({ Action: 'GetCategoryAttributes', Version: '1.0', PrimaryCategory: category });
     const { status, body } = await httpGet(url);
     if (status !== 200) throw new Error(`SellerCenter GetCategoryAttributes HTTP ${status}`);
     return parseMaybeJsonOrXml(body);
@@ -67,7 +67,7 @@ export class CatalogRepositorySellerCenter implements CatalogRepository {
 
   async getContentScore(input: CatalogContentScoreInput): Promise<unknown> {
     const { payloadXml } = input;
-    const { url } = buildSignedUrl({ Action: 'GetContentScore', Format: 'XML' });
+    const { url } = buildSignedUrl({ Action: 'GetContentScore', Version: '1.0', Format: 'XML' });
 
     const xml = payloadXml && payloadXml.trim() !== ''
       ? payloadXml
@@ -91,7 +91,7 @@ export class CatalogRepositorySellerCenter implements CatalogRepository {
 
   async productCreate(input: CatalogProductCreateInput): Promise<unknown> {
     const { payloadXml } = input;
-    const { url } = buildSignedUrl({ Action: 'ProductCreate', Format: 'XML' });
+    const { url } = buildSignedUrl({ Action: 'ProductCreate', Version: '1.0', Format: 'XML' });
 
     const xml = payloadXml && payloadXml.trim() !== ''
       ? payloadXml
@@ -120,7 +120,7 @@ export class CatalogRepositorySellerCenter implements CatalogRepository {
 
   async image(input: CatalogImageInput): Promise<unknown> {
     const { payloadXml } = input;
-    const { url } = buildSignedUrl({ Action: 'Image', Format: 'XML' });
+    const { url } = buildSignedUrl({ Action: 'Image', Version: '1.0', Format: 'XML' });
 
     const images = Array.isArray(input.images) ? input.images.filter((i) => String(i).trim() !== '') : [];
     if (images.length === 0 && !(payloadXml && payloadXml.trim() !== '')) {
