@@ -264,3 +264,12 @@ Caso convergente (`E004 Invoice already exists`):
   "message": "Invoice already exists"
 }
 ```
+
+
+### GET `/sku/:sku` incluye IDs de categoría
+
+Además de `category` (texto), ahora retorna:
+- `primaryCategoryId` (string)
+- `categoryId` (string, alias compat)
+
+Ambos salen de `PrimaryCategoryId` de Falabella `GetProducts`.

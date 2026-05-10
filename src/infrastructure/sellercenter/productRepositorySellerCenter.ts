@@ -224,6 +224,14 @@ export class ProductRepositorySellerCenter implements ProductRepository {
 
       brand: productNode.Brand ?? null,
       category: productNode.PrimaryCategory ?? null,
+      primaryCategoryId:
+        productNode.PrimaryCategoryId != null && productNode.PrimaryCategoryId !== ""
+          ? String(productNode.PrimaryCategoryId)
+          : null,
+      categoryId:
+        productNode.PrimaryCategoryId != null && productNode.PrimaryCategoryId !== ""
+          ? String(productNode.PrimaryCategoryId)
+          : null,
 
       url: productNode.Url ?? null,
       mainImage: productNode.MainImage ?? (images?.[0] ?? null),

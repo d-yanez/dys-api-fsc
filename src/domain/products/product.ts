@@ -14,6 +14,8 @@ export interface Product {
 
   brand?: string | null;
   category?: string | null;
+  primaryCategoryId?: string | null;
+  categoryId?: string | null;
 
   url?: string | null;
   mainImage?: string | null;
