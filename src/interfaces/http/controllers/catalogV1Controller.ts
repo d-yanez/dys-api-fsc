@@ -41,11 +41,17 @@ export class CatalogV1Controller {
   };
 
   getContentScore = async (req: Request, res: Response) => {
+    const body = req.body ?? {};
+    const categoryId = String((body as any).categoryId ?? (body as any).primaryCategory ?? '').trim();
+    if (!categoryId) {
+      return res.status(400).json({ error: 'categoryId is required' });
+    }
+
     try {
-      const data = await this.useCase.getContentScore(req.body ?? {});
+      const data = await this.useCase.getContentScore(body);
       return res.status(200).json(data);
     } catch (err: any) {
-      logger.error({ err: err?.message }, '❌ Error in CatalogV1Controller.getContentScore');
+      logger.error({ err: err?.message, categoryId }, '❌ Error in CatalogV1Controller.getContentScore');
       return res.status(502).json({ error: 'Error consultando content score en Falabella Seller Center' });
     }
   };

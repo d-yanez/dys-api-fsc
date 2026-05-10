@@ -66,25 +66,20 @@ export class CatalogRepositorySellerCenter implements CatalogRepository {
   }
 
   async getContentScore(input: CatalogContentScoreInput): Promise<unknown> {
-    const { payloadXml } = input;
-    const { url } = buildSignedUrl({ Action: 'GetContentScore', Version: '1.0', Format: 'XML' });
+    const categoryId = requiredString((input as any).categoryId ?? input.primaryCategory, 'categoryId');
+    const operator = String((input as any).operator ?? 'facl').trim() || 'facl';
+    const getRulesOnly = String((input as any).getRulesOnly ?? '1').trim() || '1';
 
-    const xml = payloadXml && payloadXml.trim() !== ''
-      ? payloadXml
-      : buildXmlRequest({
-          Product: {
-            SellerSku: requiredString(input.sellerSku ?? 'dry-run-sku', 'sellerSku'),
-            Name: requiredString(input.name, 'name'),
-            PrimaryCategory: requiredString(input.primaryCategory, 'primaryCategory'),
-            Description: String(input.description ?? '').trim(),
-            Brand: String(input.brand ?? '').trim(),
-          },
-        });
-
-    const { status, body } = await httpPost(url, xml, {
-      'Content-Type': 'application/xml',
-      Accept: 'application/xml',
+    const { url } = buildSignedUrl({
+      Action: 'GetContentScore',
+      Version: '1.0',
+      Format: 'XML',
+      CategoryId: categoryId,
+      GetRulesOnly: getRulesOnly,
+      Operator: operator,
     });
+
+    const { status, body } = await httpGet(url);
     if (status !== 200) throw new Error(`SellerCenter GetContentScore HTTP ${status}`);
     return parseMaybeJsonOrXml(body);
   }
