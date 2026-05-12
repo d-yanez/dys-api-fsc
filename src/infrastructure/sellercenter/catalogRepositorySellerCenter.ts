@@ -6,6 +6,7 @@ import type {
   CatalogRepository,
 } from '../../domain/catalog/catalogRepository';
 import { buildSignedUrl, httpGet, httpPost } from './sellerCenterClient';
+import { logger } from '../logger/logger';
 
 function parseMaybeJsonOrXml(raw: string): any {
   try {
@@ -156,6 +157,20 @@ export class CatalogRepositorySellerCenter implements CatalogRepository {
               : {}),
           },
         });
+
+    logger.info(
+      {
+        sellerSku,
+        name,
+        primaryCategory,
+        hasDescription: description !== '',
+        hasBrand: brand !== '',
+        businessUnitsCount: businessUnits.length,
+        productDataKeys: Object.keys(productData).length,
+        xmlPreview: xml.slice(0, 800),
+      },
+      'catalog_product_create_payload_built'
+    );
 
     const { status, body } = await httpPost(url, xml, {
       'Content-Type': 'application/xml',
