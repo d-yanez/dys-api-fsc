@@ -31,10 +31,42 @@ function extractFeedId(parsed: any): string | null {
   return null;
 }
 
+function extractError(parsed: any): { code: string | null; message: string | null } | null {
+  const head = parsed?.ErrorResponse?.Head;
+  if (!head) return null;
+  const code = head?.ErrorCode != null ? String(head.ErrorCode).trim() : null;
+  const message = head?.ErrorMessage != null ? String(head.ErrorMessage).trim() : null;
+  return { code: code || null, message: message || null };
+}
+
 function requiredString(v: unknown, field: string): string {
   const s = String(v ?? '').trim();
   if (!s) throw new Error(`${field} is required`);
   return s;
+}
+
+function firstNonEmpty(...values: unknown[]): string {
+  for (const value of values) {
+    const normalized = String(value ?? '').trim();
+    if (normalized !== '') return normalized;
+  }
+  return '';
+}
+
+function toBusinessUnitArray(input: any): Record<string, unknown>[] {
+  const raw = input?.businessUnits ?? input?.businessUnit ?? input?.extraAttributes?.businessUnit;
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw.filter((item) => item && typeof item === 'object') as Record<string, unknown>[];
+  }
+  if (typeof raw === 'object') return [raw as Record<string, unknown>];
+  return [];
+}
+
+function toProductDataMap(input: any): Record<string, unknown> {
+  const raw = input?.productData ?? input?.attributes ?? input?.extraAttributes?.productData;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  return raw as Record<string, unknown>;
 }
 
 function buildXmlRequest(input: any): string {
@@ -88,15 +120,40 @@ export class CatalogRepositorySellerCenter implements CatalogRepository {
     const { payloadXml } = input;
     const { url } = buildSignedUrl({ Action: 'ProductCreate', Version: '1.0', Format: 'XML' });
 
+    const sellerSku = firstNonEmpty((input as any).sellerSku, (input as any).newSellerSku);
+    const name = firstNonEmpty((input as any).name, (input as any).title);
+    const primaryCategory = firstNonEmpty(
+      (input as any).primaryCategory,
+      (input as any).category,
+      (input as any).primaryCategoryId,
+      (input as any).categoryId
+    );
+    const description = firstNonEmpty((input as any).description);
+    const brand = firstNonEmpty((input as any).brand);
+    const businessUnits = toBusinessUnitArray(input);
+    const productData = toProductDataMap(input);
+
     const xml = payloadXml && payloadXml.trim() !== ''
       ? payloadXml
       : buildXmlRequest({
           Product: {
-            SellerSku: requiredString(input.sellerSku, 'sellerSku'),
-            Name: requiredString(input.name, 'name'),
-            PrimaryCategory: requiredString(input.primaryCategory, 'primaryCategory'),
-            Description: String(input.description ?? '').trim(),
-            Brand: String(input.brand ?? '').trim(),
+            SellerSku: requiredString(sellerSku, 'sellerSku'),
+            Name: requiredString(name, 'name'),
+            PrimaryCategory: requiredString(primaryCategory, 'primaryCategory'),
+            Description: requiredString(description, 'description'),
+            Brand: requiredString(brand, 'brand'),
+            ...(businessUnits.length > 0
+              ? {
+                  BusinessUnits: {
+                    BusinessUnit: businessUnits,
+                  },
+                }
+              : {}),
+            ...(Object.keys(productData).length > 0
+              ? {
+                  ProductData: productData,
+                }
+              : {}),
           },
         });
 
@@ -106,9 +163,19 @@ export class CatalogRepositorySellerCenter implements CatalogRepository {
     });
     if (status !== 200) throw new Error(`SellerCenter ProductCreate HTTP ${status}`);
     const parsed = parseMaybeJsonOrXml(body);
+    const parsedError = extractError(parsed);
+    if (parsedError) {
+      throw new Error(
+        `SellerCenter ProductCreate ErrorResponse${parsedError.code ? ` [${parsedError.code}]` : ''}${parsedError.message ? ` ${parsedError.message}` : ''}`
+      );
+    }
+    const feedId = extractFeedId(parsed);
+    if (!feedId) {
+      throw new Error('SellerCenter ProductCreate returned success without feedId');
+    }
     return {
       ok: true,
-      feedId: extractFeedId(parsed),
+      feedId,
       raw: parsed,
     };
   }
@@ -139,9 +206,19 @@ export class CatalogRepositorySellerCenter implements CatalogRepository {
     });
     if (status !== 200) throw new Error(`SellerCenter Image HTTP ${status}`);
     const parsed = parseMaybeJsonOrXml(body);
+    const parsedError = extractError(parsed);
+    if (parsedError) {
+      throw new Error(
+        `SellerCenter Image ErrorResponse${parsedError.code ? ` [${parsedError.code}]` : ''}${parsedError.message ? ` ${parsedError.message}` : ''}`
+      );
+    }
+    const feedId = extractFeedId(parsed);
+    if (!feedId) {
+      throw new Error('SellerCenter Image returned success without feedId');
+    }
     return {
       ok: true,
-      feedId: extractFeedId(parsed),
+      feedId,
       raw: parsed,
     };
   }
