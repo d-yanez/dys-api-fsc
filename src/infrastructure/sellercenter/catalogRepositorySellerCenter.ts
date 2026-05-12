@@ -71,7 +71,7 @@ function toProductDataMap(input: any): Record<string, unknown> {
 }
 
 function buildXmlRequest(input: any): string {
-  const builder = new XMLBuilder({ ignoreAttributes: false, attributeNamePrefix: '', suppressEmptyNode: true });
+  const builder = new XMLBuilder({ ignoreAttributes: true, suppressEmptyNode: true });
   return builder.build({ Request: input });
 }
 
