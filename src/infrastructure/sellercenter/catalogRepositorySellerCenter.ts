@@ -57,11 +57,26 @@ function firstNonEmpty(...values: unknown[]): string {
 function toBusinessUnitArray(input: any): Record<string, unknown>[] {
   const raw = input?.businessUnits ?? input?.businessUnit ?? input?.extraAttributes?.businessUnit;
   if (!raw) return [];
-  if (Array.isArray(raw)) {
-    return raw.filter((item) => item && typeof item === 'object') as Record<string, unknown>[];
-  }
-  if (typeof raw === 'object') return [raw as Record<string, unknown>];
-  return [];
+  const source = Array.isArray(raw) ? raw : [raw];
+  const mapped = source
+    .filter((item) => item && typeof item === 'object')
+    .map((item) => {
+      const unit = item as Record<string, unknown>;
+      const normalized: Record<string, unknown> = {
+        OperatorCode: firstNonEmpty(unit.OperatorCode, 'facl'),
+      };
+      const optionalKeys = ['Price', 'SpecialPrice', 'SpecialFromDate', 'SpecialToDate', 'Stock', 'Status'];
+      for (const key of optionalKeys) {
+        const value = unit[key];
+        const normalizedValue = String(value ?? '').trim();
+        if (normalizedValue !== '') {
+          normalized[key] = value;
+        }
+      }
+      return normalized;
+    })
+    .filter((unit) => String(unit.OperatorCode ?? '').trim() !== '');
+  return mapped;
 }
 
 function toProductDataMap(input: any): Record<string, unknown> {
@@ -181,7 +196,7 @@ export class CatalogRepositorySellerCenter implements CatalogRepository {
     const parsedError = extractError(parsed);
     if (parsedError) {
       throw new Error(
-        `SellerCenter ProductCreate ErrorResponse${parsedError.code ? ` [${parsedError.code}]` : ''}${parsedError.message ? ` ${parsedError.message}` : ''}`
+        `SellerCenter ProductCreate ErrorResponse${parsedError.code ? ` [${parsedError.code}]` : ''}${parsedError.message ? ` ${parsedError.message}` : ''} body=${body.slice(0, 1200)}`
       );
     }
     const feedId = extractFeedId(parsed);
