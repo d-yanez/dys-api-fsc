@@ -1,4 +1,5 @@
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
+import crypto from 'crypto';
 import type {
   CatalogContentScoreInput,
   CatalogImageInput,
@@ -90,6 +91,62 @@ function buildXmlRequest(input: any): string {
   return builder.build({ Request: input });
 }
 
+type CategoryTemplate = {
+  templateId: string;
+  buildProductNode: (input: CatalogProductCreateInput, categoryId: string) => Record<string, unknown>;
+};
+
+const CATEGORY_TEMPLATE_REGISTRY: Record<string, CategoryTemplate> = {
+  '2316': {
+    templateId: 'cat-2316-v1',
+    buildProductNode: (input: CatalogProductCreateInput, categoryId: string) => {
+      const typedInput = input as any;
+      const sellerSku = requiredString(firstNonEmpty(typedInput.sellerSku, typedInput.newSellerSku), 'sellerSku');
+      const name = requiredString(firstNonEmpty(typedInput.name, typedInput.title), 'name');
+      const description = requiredString(firstNonEmpty(typedInput.description), 'description');
+      const brand = requiredString(firstNonEmpty(typedInput.brand), 'brand');
+      const parentSku = firstNonEmpty(typedInput.parentSku, sellerSku);
+      const productId = firstNonEmpty(typedInput.productId);
+      const variation = firstNonEmpty(typedInput.variation);
+      const colorBasico = firstNonEmpty(typedInput.colorBasico);
+      const productData = toProductDataMap(typedInput);
+      const businessUnits = toBusinessUnitArray(typedInput);
+
+      return {
+        SellerSku: sellerSku,
+        ParentSku: parentSku,
+        Name: name,
+        PrimaryCategory: categoryId,
+        Brand: brand,
+        ...(productId !== '' ? { ProductId: productId } : {}),
+        Description: description,
+        ...(variation !== '' ? { Variation: variation } : {}),
+        ...(colorBasico !== '' ? { ColorBasico: colorBasico } : {}),
+        ...(Object.keys(productData).length > 0 ? { ProductData: productData } : {}),
+        ...(businessUnits.length > 0
+          ? {
+              BusinessUnits: {
+                BusinessUnit: businessUnits,
+              },
+            }
+          : {}),
+      };
+    },
+  },
+};
+
+function resolveCategoryId(input: CatalogProductCreateInput): string {
+  const typedInput = input as any;
+  const candidate = firstNonEmpty(typedInput.categoryId, typedInput.primaryCategoryId, typedInput.primaryCategory);
+  if (/^\d+$/.test(candidate)) return candidate;
+  return '';
+}
+
+function payloadFingerprint(payload: Record<string, unknown>): string {
+  const serialized = JSON.stringify(payload);
+  return crypto.createHash('sha1').update(serialized).digest('hex');
+}
+
 export class CatalogRepositorySellerCenter implements CatalogRepository {
   async getBrands(): Promise<unknown> {
     const { url } = buildSignedUrl({ Action: 'GetBrands', Version: '1.0' });
@@ -135,53 +192,39 @@ export class CatalogRepositorySellerCenter implements CatalogRepository {
   async productCreate(input: CatalogProductCreateInput): Promise<unknown> {
     const { payloadXml } = input;
     const { url } = buildSignedUrl({ Action: 'ProductCreate', Version: '1.0', Format: 'XML' });
-
-    const sellerSku = firstNonEmpty((input as any).sellerSku, (input as any).newSellerSku);
-    const name = firstNonEmpty((input as any).name, (input as any).title);
-    const primaryCategory = firstNonEmpty(
-      (input as any).primaryCategory,
-      (input as any).category,
-      (input as any).primaryCategoryId,
-      (input as any).categoryId
-    );
-    const description = firstNonEmpty((input as any).description);
-    const brand = firstNonEmpty((input as any).brand);
-    const businessUnits = toBusinessUnitArray(input);
-    const productData = toProductDataMap(input);
-
-    const xml = payloadXml && payloadXml.trim() !== ''
-      ? payloadXml
-      : buildXmlRequest({
-          Product: {
-            SellerSku: requiredString(sellerSku, 'sellerSku'),
-            Name: requiredString(name, 'name'),
-            PrimaryCategory: requiredString(primaryCategory, 'primaryCategory'),
-            Description: requiredString(description, 'description'),
-            Brand: requiredString(brand, 'brand'),
-            ...(businessUnits.length > 0
-              ? {
-                  BusinessUnits: {
-                    BusinessUnit: businessUnits,
-                  },
-                }
-              : {}),
-            ...(Object.keys(productData).length > 0
-              ? {
-                  ProductData: productData,
-                }
-              : {}),
-          },
-        });
+    const categoryId = resolveCategoryId(input);
+    const template = CATEGORY_TEMPLATE_REGISTRY[categoryId];
+    const isRawPayload = payloadXml && payloadXml.trim() !== '';
+    if (!isRawPayload && !template) {
+      throw new Error(`category_template_not_found: ${categoryId || 'missing'}`);
+    }
+    const productNode = !isRawPayload && template ? template.buildProductNode(input, categoryId) : {};
+    const effectivePayload = !isRawPayload ? { Product: productNode } : {};
+    const xml = isRawPayload ? String(payloadXml) : buildXmlRequest(effectivePayload);
+    const sellerSku = !isRawPayload ? String((productNode as any).SellerSku ?? '') : '';
+    const name = !isRawPayload ? String((productNode as any).Name ?? '') : '';
+    const primaryCategory = !isRawPayload ? String((productNode as any).PrimaryCategory ?? '') : '';
+    const businessUnitsCount = !isRawPayload
+      ? (Array.isArray((productNode as any)?.BusinessUnits?.BusinessUnit)
+          ? (productNode as any).BusinessUnits.BusinessUnit.length
+          : ((productNode as any)?.BusinessUnits?.BusinessUnit ? 1 : 0))
+      : 0;
+    const productDataKeys = !isRawPayload && typeof (productNode as any)?.ProductData === 'object'
+      ? Object.keys((productNode as any).ProductData).length
+      : 0;
 
     logger.info(
       {
         sellerSku,
         name,
         primaryCategory,
-        hasDescription: description !== '',
-        hasBrand: brand !== '',
-        businessUnitsCount: businessUnits.length,
-        productDataKeys: Object.keys(productData).length,
+        categoryId: categoryId || null,
+        templateId: isRawPayload ? 'raw-payload' : template?.templateId ?? null,
+        hasDescription: !isRawPayload ? String((productNode as any).Description ?? '').trim() !== '' : null,
+        hasBrand: !isRawPayload ? String((productNode as any).Brand ?? '').trim() !== '' : null,
+        businessUnitsCount,
+        productDataKeys,
+        payloadFingerprint: !isRawPayload ? payloadFingerprint(effectivePayload) : null,
         xmlPreview: xml.slice(0, 800),
       },
       'catalog_product_create_payload_built'
@@ -206,6 +249,8 @@ export class CatalogRepositorySellerCenter implements CatalogRepository {
     return {
       ok: true,
       feedId,
+      categoryId: categoryId || null,
+      templateId: isRawPayload ? 'raw-payload' : template?.templateId ?? null,
       raw: parsed,
     };
   }
@@ -214,7 +259,7 @@ export class CatalogRepositorySellerCenter implements CatalogRepository {
     const { payloadXml } = input;
     const { url } = buildSignedUrl({ Action: 'Image', Version: '1.0', Format: 'XML' });
 
-    const images = Array.isArray(input.images) ? input.images.filter((i) => String(i).trim() !== '') : [];
+    const images = Array.isArray(input.images) ? input.images.filter((i) => String(i).trim() !== '').slice(0, 8) : [];
     if (images.length === 0 && !(payloadXml && payloadXml.trim() !== '')) {
       throw new Error('images is required');
     }
@@ -225,7 +270,7 @@ export class CatalogRepositorySellerCenter implements CatalogRepository {
           ProductImage: {
             SellerSku: requiredString(input.sellerSku, 'sellerSku'),
             Images: {
-              Image: images.map((url) => ({ Url: String(url).trim() })),
+              Image: images.map((url) => String(url).trim()),
             },
           },
         });
@@ -253,3 +298,11 @@ export class CatalogRepositorySellerCenter implements CatalogRepository {
     };
   }
 }
+
+export const __testables = {
+  resolveCategoryId,
+  toBusinessUnitArray,
+  toProductDataMap,
+  buildXmlRequest,
+  CATEGORY_TEMPLATE_REGISTRY,
+};
