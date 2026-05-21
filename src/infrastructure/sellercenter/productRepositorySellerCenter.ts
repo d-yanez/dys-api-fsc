@@ -93,7 +93,21 @@ export class ProductRepositorySellerCenter implements ProductRepository {
     const buNode = Array.isArray(buRaw) ? buRaw[0] : buRaw ?? null;
 
     // --- ProductData (dimensiones y otros metadatos) ---
-    const productData = productNode.ProductData ?? null;
+    const productDataRaw = productNode.ProductData ?? null;
+    const productData =
+      productDataRaw && typeof productDataRaw === "object" && !Array.isArray(productDataRaw)
+        ? ({ ...(productDataRaw as Record<string, unknown>) } as Record<string, unknown>)
+        : null;
+    if (productData) {
+      const rootColor = productNode.Color != null ? String(productNode.Color).trim() : "";
+      const rootTalla = productNode.Talla != null ? String(productNode.Talla).trim() : "";
+      if (rootColor !== "" && (productData.Color == null || String(productData.Color).trim() === "")) {
+        productData.Color = rootColor;
+      }
+      if (rootTalla !== "" && (productData.Talla == null || String(productData.Talla).trim() === "")) {
+        productData.Talla = rootTalla;
+      }
+    }
 
     // --- variationAttributes ---
     const variationAttributes: ProductAttribute[] | null =
