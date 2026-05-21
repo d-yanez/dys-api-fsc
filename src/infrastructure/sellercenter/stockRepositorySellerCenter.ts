@@ -423,6 +423,23 @@ export class StockRepositorySellerCenter
       return Number.isFinite(parsedNumber) ? parsedNumber : null;
     };
 
+    const possibleFailureHint = (() => {
+      const candidates = [
+        (detail as any)?.ErrorMessage,
+        (detail as any)?.Error,
+        (detail as any)?.FailureReason,
+        (detail as any)?.FailedReason,
+        (detail as any)?.Reason,
+        (detail as any)?.Message
+      ];
+      for (const c of candidates) {
+        if (c === null || c === undefined) continue;
+        const s = String(c).trim();
+        if (s !== '') return s;
+      }
+      return null;
+    })();
+
     return {
       success: true,
       feedId: normalizedFeedId,
@@ -433,7 +450,9 @@ export class StockRepositorySellerCenter
       source: toTrimmedStringOrNull(detail.Source),
       totalRecords: toOptionalNumber(detail.TotalRecords),
       processedRecords: toOptionalNumber(detail.ProcessedRecords),
-      failedRecords: toOptionalNumber(detail.FailedRecords)
+      failedRecords: toOptionalNumber(detail.FailedRecords),
+      detail: detail as Record<string, unknown>,
+      failureHint: possibleFailureHint
     };
   }
 }

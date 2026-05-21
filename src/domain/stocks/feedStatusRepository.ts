@@ -9,6 +9,8 @@ export interface FeedStatusResult {
   totalRecords: number | null;
   processedRecords: number | null;
   failedRecords: number | null;
+  detail?: Record<string, unknown> | null;
+  failureHint?: string | null;
 }
 
 export interface FeedStatusRepository {

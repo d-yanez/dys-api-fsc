@@ -195,18 +195,18 @@ test('StockRepositorySellerCenter maps FeedStatus SuccessResponse XML to effecti
   const repository = new StockRepositorySellerCenter();
   const result = await repository.getFeedStatus('90ffc2f7-99d4-4fb2-b7d4-bfe8e5f7c34c');
 
-  assert.deepEqual(result, {
-    success: true,
-    feedId: '90ffc2f7-99d4-4fb2-b7d4-bfe8e5f7c34c',
-    status: 'Finished',
-    action: 'ProductStockUpdate',
-    creationDate: '2026-03-26 23:35:38',
-    updatedDate: '2026-03-26 23:35:39',
-    source: 'api',
-    totalRecords: 1,
-    processedRecords: 1,
-    failedRecords: 0
-  });
+  assert.equal(result.success, true);
+  assert.equal(result.feedId, '90ffc2f7-99d4-4fb2-b7d4-bfe8e5f7c34c');
+  assert.equal(result.status, 'Finished');
+  assert.equal(result.action, 'ProductStockUpdate');
+  assert.equal(result.creationDate, '2026-03-26 23:35:38');
+  assert.equal(result.updatedDate, '2026-03-26 23:35:39');
+  assert.equal(result.source, 'api');
+  assert.equal(result.totalRecords, 1);
+  assert.equal(result.processedRecords, 1);
+  assert.equal(result.failedRecords, 0);
+  assert.equal(result.failureHint, null);
+  assert.equal((result.detail as Record<string, unknown>)?.Status, 'Finished');
 });
 
 test('StockRepositorySellerCenter maps FeedStatus ErrorResponse XML to typed error', async () => {
