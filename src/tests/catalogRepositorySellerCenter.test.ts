@@ -50,6 +50,45 @@ test('template 2316 arma ProductCreate con nodos requeridos', () => {
   assert.equal(product?.ProductData?.Material, 'ABS');
 });
 
+test('template 3367 existe y arma ProductCreate con nodos requeridos', () => {
+  const template = __testables.CATEGORY_TEMPLATE_REGISTRY['3367'];
+  assert.ok(template);
+
+  const productNode = template.buildProductNode(
+    {
+      sellerSku: '1434239945',
+      name: 'Mochila escolar',
+      primaryCategory: '3367',
+      description: 'desc',
+      brand: 'GENERICO',
+      productId: '1260521123001',
+      productData: {
+        CantidadDeCompartimentos: 5,
+        PackageHeight: 15,
+        PackageLength: 40,
+        PackageWeight: 0.2,
+        PackageWidth: 30,
+      },
+      businessUnits: {
+        OperatorCode: 'facl',
+        Price: 72990,
+        Stock: 1,
+        Status: 'active',
+      },
+    } as any,
+    '3367'
+  );
+
+  const xml = __testables.buildXmlRequest({ Product: productNode });
+  const parsed = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '' }).parse(xml);
+  const product = parsed?.Request?.Product;
+
+  assert.equal(String(product?.SellerSku), '1434239945');
+  assert.equal(String(product?.PrimaryCategory), '3367');
+  assert.equal(product?.ProductData?.CantidadDeCompartimentos, 5);
+  assert.equal(product?.BusinessUnits?.BusinessUnit?.OperatorCode, 'facl');
+});
+
 test('toBusinessUnitArray normaliza campos válidos', () => {
   const units = __testables.toBusinessUnitArray({
     businessUnit: {

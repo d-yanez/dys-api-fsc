@@ -96,42 +96,48 @@ type CategoryTemplate = {
   buildProductNode: (input: CatalogProductCreateInput, categoryId: string) => Record<string, unknown>;
 };
 
+function buildDefaultCategoryProductNode(input: CatalogProductCreateInput, categoryId: string): Record<string, unknown> {
+  const typedInput = input as any;
+  const sellerSku = requiredString(firstNonEmpty(typedInput.sellerSku, typedInput.newSellerSku), 'sellerSku');
+  const name = requiredString(firstNonEmpty(typedInput.name, typedInput.title), 'name');
+  const description = requiredString(firstNonEmpty(typedInput.description), 'description');
+  const brand = requiredString(firstNonEmpty(typedInput.brand), 'brand');
+  const parentSku = firstNonEmpty(typedInput.parentSku, sellerSku);
+  const productId = firstNonEmpty(typedInput.productId);
+  const variation = firstNonEmpty(typedInput.variation);
+  const colorBasico = firstNonEmpty(typedInput.colorBasico);
+  const productData = toProductDataMap(typedInput);
+  const businessUnits = toBusinessUnitArray(typedInput);
+
+  return {
+    SellerSku: sellerSku,
+    ParentSku: parentSku,
+    Name: name,
+    PrimaryCategory: categoryId,
+    Brand: brand,
+    ...(productId !== '' ? { ProductId: productId } : {}),
+    Description: description,
+    ...(variation !== '' ? { Variation: variation } : {}),
+    ...(colorBasico !== '' ? { ColorBasico: colorBasico } : {}),
+    ...(Object.keys(productData).length > 0 ? { ProductData: productData } : {}),
+    ...(businessUnits.length > 0
+      ? {
+          BusinessUnits: {
+            BusinessUnit: businessUnits,
+          },
+        }
+      : {}),
+  };
+}
+
 const CATEGORY_TEMPLATE_REGISTRY: Record<string, CategoryTemplate> = {
   '2316': {
     templateId: 'cat-2316-v1',
-    buildProductNode: (input: CatalogProductCreateInput, categoryId: string) => {
-      const typedInput = input as any;
-      const sellerSku = requiredString(firstNonEmpty(typedInput.sellerSku, typedInput.newSellerSku), 'sellerSku');
-      const name = requiredString(firstNonEmpty(typedInput.name, typedInput.title), 'name');
-      const description = requiredString(firstNonEmpty(typedInput.description), 'description');
-      const brand = requiredString(firstNonEmpty(typedInput.brand), 'brand');
-      const parentSku = firstNonEmpty(typedInput.parentSku, sellerSku);
-      const productId = firstNonEmpty(typedInput.productId);
-      const variation = firstNonEmpty(typedInput.variation);
-      const colorBasico = firstNonEmpty(typedInput.colorBasico);
-      const productData = toProductDataMap(typedInput);
-      const businessUnits = toBusinessUnitArray(typedInput);
-
-      return {
-        SellerSku: sellerSku,
-        ParentSku: parentSku,
-        Name: name,
-        PrimaryCategory: categoryId,
-        Brand: brand,
-        ...(productId !== '' ? { ProductId: productId } : {}),
-        Description: description,
-        ...(variation !== '' ? { Variation: variation } : {}),
-        ...(colorBasico !== '' ? { ColorBasico: colorBasico } : {}),
-        ...(Object.keys(productData).length > 0 ? { ProductData: productData } : {}),
-        ...(businessUnits.length > 0
-          ? {
-              BusinessUnits: {
-                BusinessUnit: businessUnits,
-              },
-            }
-          : {}),
-      };
-    },
+    buildProductNode: buildDefaultCategoryProductNode,
+  },
+  '3367': {
+    templateId: 'cat-3367-v1',
+    buildProductNode: buildDefaultCategoryProductNode,
   },
 };
 
