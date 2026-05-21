@@ -63,6 +63,8 @@ test('template 3367 existe y arma ProductCreate con nodos requeridos', () => {
       brand: 'GENERICO',
       productId: '1260521123001',
       productData: {
+        Color: 'Blanco',
+        Talla: '7',
         CantidadDeCompartimentos: 5,
         PackageHeight: 15,
         PackageLength: 40,
@@ -85,6 +87,8 @@ test('template 3367 existe y arma ProductCreate con nodos requeridos', () => {
 
   assert.equal(String(product?.SellerSku), '1434239945');
   assert.equal(String(product?.PrimaryCategory), '3367');
+  assert.equal(product?.Color, 'Blanco');
+  assert.equal(String(product?.Talla), '7');
   assert.equal(product?.ProductData?.CantidadDeCompartimentos, 5);
   assert.equal(product?.BusinessUnits?.BusinessUnit?.OperatorCode, 'facl');
 });

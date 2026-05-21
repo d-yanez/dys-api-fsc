@@ -106,6 +106,8 @@ function buildDefaultCategoryProductNode(input: CatalogProductCreateInput, categ
   const productId = firstNonEmpty(typedInput.productId);
   const variation = firstNonEmpty(typedInput.variation);
   const colorBasico = firstNonEmpty(typedInput.colorBasico);
+  const color = firstNonEmpty(typedInput.color, typedInput.Color, String((typedInput?.productData ?? typedInput?.attributes ?? {})?.Color ?? '').trim());
+  const talla = firstNonEmpty(typedInput.talla, typedInput.Talla, String((typedInput?.productData ?? typedInput?.attributes ?? {})?.Talla ?? '').trim());
   const productData = toProductDataMap(typedInput);
   const businessUnits = toBusinessUnitArray(typedInput);
 
@@ -119,6 +121,8 @@ function buildDefaultCategoryProductNode(input: CatalogProductCreateInput, categ
     Description: description,
     ...(variation !== '' ? { Variation: variation } : {}),
     ...(colorBasico !== '' ? { ColorBasico: colorBasico } : {}),
+    ...(color !== '' ? { Color: color } : {}),
+    ...(talla !== '' ? { Talla: talla } : {}),
     ...(Object.keys(productData).length > 0 ? { ProductData: productData } : {}),
     ...(businessUnits.length > 0
       ? {
