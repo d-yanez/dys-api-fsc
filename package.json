@@ -7,7 +7,9 @@
     "dev": "ts-node-dev --respawn --transpile-only src/interfaces/http/server.ts",
     "build": "rimraf dist && tsc",
     "start": "node dist/interfaces/http/server.js",
-    "test": "npm run build && node --test dist/tests"
+    "test": "npm run build && node --test dist/tests",
+    "deps:policy": "node -e \"const p=require('./package.json');const bad=[];for(const sec of ['dependencies','devDependencies','optionalDependencies']){for(const [n,v] of Object.entries(p[sec]||{})){if(v==='latest'||v==='*'){bad.push(sec+':'+n+'@'+v)}}} if(bad.length){console.error('Blocked dependency specs:\\\\n'+bad.join('\\\\n'));process.exit(1)} console.log('deps policy ok')\"",
+    "deps:install:ci": "npm ci --ignore-scripts"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
