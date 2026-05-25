@@ -15,7 +15,7 @@
   "dependencies": {
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "fast-xml-parser": "^4.5.3",
+    "fast-xml-parser": "^4.5.5",
     "pino": "^9.3.0",
     "pino-http": "^10.1.0"
   },
@@ -27,5 +27,13 @@
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.5.4"
   },
-  "packageManager": "pnpm@10.24.0"
+  "packageManager": "pnpm@10.24.0",
+  "pnpm": {
+    "overrides": {
+      "glob": "10.5.0",
+      "minimatch": "9.0.7",
+      "path-to-regexp": "0.1.13",
+      "picomatch": "2.3.2"
+    }
+  }
 }
