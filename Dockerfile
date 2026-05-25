@@ -9,14 +9,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
  && rm -rf /var/lib/apt/lists/*
 
 # Solo copiamos lo necesario para instalar deps y compilar
-COPY package*.json ./
-RUN npm ci --ignore-scripts
+COPY package.json pnpm-lock.yaml ./
+RUN corepack enable && corepack prepare pnpm@10.24.0 --activate
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 COPY tsconfig.json ./
 COPY src ./src
 
 # Compilamos TypeScript -> dist
-RUN npm run build
+RUN pnpm run build
 
 # ---- Runtime stage ----
 FROM node:20-bookworm-slim
@@ -33,8 +34,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
  && rm -rf /var/lib/apt/lists/*
 
 # Solo package.json/lock para instalar deps de producción
-COPY package*.json ./
-RUN npm ci --omit=dev --ignore-scripts
+COPY package.json pnpm-lock.yaml ./
+RUN corepack enable && corepack prepare pnpm@10.24.0 --activate
+RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 
 # Copiamos el código compilado desde el builder
 COPY --from=builder /app/dist ./dist
