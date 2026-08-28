@@ -135,6 +135,10 @@ function buildDefaultCategoryProductNode(input: CatalogProductCreateInput, categ
 }
 
 const CATEGORY_TEMPLATE_REGISTRY: Record<string, CategoryTemplate> = {
+  '1584': {
+    templateId: 'cat-1584-v1',
+    buildProductNode: buildDefaultCategoryProductNode,
+  },
   '2316': {
     templateId: 'cat-2316-v1',
     buildProductNode: buildDefaultCategoryProductNode,
@@ -144,6 +148,10 @@ const CATEGORY_TEMPLATE_REGISTRY: Record<string, CategoryTemplate> = {
     buildProductNode: buildDefaultCategoryProductNode,
   },
 };
+
+function resolveCategoryTemplate(categoryId: string): CategoryTemplate | undefined {
+  return CATEGORY_TEMPLATE_REGISTRY[categoryId];
+}
 
 function resolveCategoryId(input: CatalogProductCreateInput): string {
   const typedInput = input as any;
@@ -203,7 +211,7 @@ export class CatalogRepositorySellerCenter implements CatalogRepository {
     const { payloadXml } = input;
     const { url } = buildSignedUrl({ Action: 'ProductCreate', Version: '1.0', Format: 'XML' });
     const categoryId = resolveCategoryId(input);
-    const template = CATEGORY_TEMPLATE_REGISTRY[categoryId];
+    const template = resolveCategoryTemplate(categoryId);
     const isRawPayload = payloadXml && payloadXml.trim() !== '';
     if (!isRawPayload && !template) {
       throw new Error(`category_template_not_found: ${categoryId || 'missing'}`);
@@ -311,6 +319,7 @@ export class CatalogRepositorySellerCenter implements CatalogRepository {
 
 export const __testables = {
   resolveCategoryId,
+  resolveCategoryTemplate,
   toBusinessUnitArray,
   toProductDataMap,
   buildXmlRequest,

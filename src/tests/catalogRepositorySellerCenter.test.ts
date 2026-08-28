@@ -50,6 +50,42 @@ test('template 2316 arma ProductCreate con nodos requeridos', () => {
   assert.equal(product?.ProductData?.Material, 'ABS');
 });
 
+test('template 1584 se resuelve y arma ProductCreate con su categoría', () => {
+  const template = __testables.resolveCategoryTemplate('1584');
+  assert.ok(template, '1584 no debe producir category_template_not_found');
+  assert.equal(template.templateId, 'cat-1584-v1');
+
+  const productNode = template.buildProductNode(
+    {
+      sellerSku: '1584-SKU-1',
+      name: 'Producto categoría 1584',
+      primaryCategory: '1584',
+      description: 'desc',
+      brand: 'GENERICO',
+      productId: '1584000001',
+      productData: {
+        Model: 'Modelo 1584',
+        Material: 'Poliéster',
+      },
+      businessUnits: {
+        OperatorCode: 'facl',
+        Price: 19990,
+        Stock: 3,
+        Status: 'active',
+      },
+    } as any,
+    '1584'
+  );
+
+  const xml = __testables.buildXmlRequest({ Product: productNode });
+  const parsed = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '' }).parse(xml);
+  const product = parsed?.Request?.Product;
+
+  assert.equal(String(product?.PrimaryCategory), '1584');
+  assert.equal(product?.ProductData?.Model, 'Modelo 1584');
+  assert.equal(product?.BusinessUnits?.BusinessUnit?.OperatorCode, 'facl');
+});
+
 test('template 3367 existe y arma ProductCreate con nodos requeridos', () => {
   const template = __testables.CATEGORY_TEMPLATE_REGISTRY['3367'];
   assert.ok(template);
