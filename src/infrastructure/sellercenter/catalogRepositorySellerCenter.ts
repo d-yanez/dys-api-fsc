@@ -102,6 +102,7 @@ function buildDefaultCategoryProductNode(input: CatalogProductCreateInput, categ
   const name = requiredString(firstNonEmpty(typedInput.name, typedInput.title), 'name');
   const description = requiredString(firstNonEmpty(typedInput.description), 'description');
   const brand = requiredString(firstNonEmpty(typedInput.brand), 'brand');
+  const taxClass = firstNonEmpty(typedInput.taxClass, typedInput.TaxClass);
   const parentSku = firstNonEmpty(typedInput.parentSku, sellerSku);
   const productId = firstNonEmpty(typedInput.productId);
   const variation = firstNonEmpty(typedInput.variation);
@@ -117,6 +118,7 @@ function buildDefaultCategoryProductNode(input: CatalogProductCreateInput, categ
     Name: name,
     PrimaryCategory: categoryId,
     Brand: brand,
+    ...(taxClass !== '' ? { TaxClass: taxClass } : {}),
     ...(productId !== '' ? { ProductId: productId } : {}),
     Description: description,
     ...(variation !== '' ? { Variation: variation } : {}),
@@ -141,6 +143,10 @@ const CATEGORY_TEMPLATE_REGISTRY: Record<string, CategoryTemplate> = {
   },
   '2316': {
     templateId: 'cat-2316-v1',
+    buildProductNode: buildDefaultCategoryProductNode,
+  },
+  '2493': {
+    templateId: 'cat-2493-v1',
     buildProductNode: buildDefaultCategoryProductNode,
   },
   '3367': {

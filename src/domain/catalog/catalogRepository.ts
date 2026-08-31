@@ -4,6 +4,7 @@ export interface CatalogProductCreateInput {
   primaryCategory: string;
   description?: string;
   brand?: string;
+  taxClass?: string;
   images?: string[];
   attributes?: Array<{ name: string; value: string }>;
   payloadXml?: string;

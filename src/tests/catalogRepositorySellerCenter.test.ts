@@ -46,6 +46,7 @@ test('template 2316 arma ProductCreate con nodos requeridos', () => {
   assert.equal(String(product?.SellerSku), '1929830110');
   assert.equal(String(product?.PrimaryCategory), '2316');
   assert.equal(product?.Brand, 'GENERICO');
+  assert.equal(Object.prototype.hasOwnProperty.call(product, 'TaxClass'), false);
   assert.equal(product?.BusinessUnits?.BusinessUnit?.OperatorCode, 'facl');
   assert.equal(product?.ProductData?.Material, 'ABS');
 });
@@ -83,6 +84,42 @@ test('template 1584 se resuelve y arma ProductCreate con su categoría', () => {
 
   assert.equal(String(product?.PrimaryCategory), '1584');
   assert.equal(product?.ProductData?.Model, 'Modelo 1584');
+  assert.equal(product?.BusinessUnits?.BusinessUnit?.OperatorCode, 'facl');
+});
+
+test('template 2493 carries TaxClass into the Seller Center XML', () => {
+  const template = __testables.resolveCategoryTemplate('2493');
+  assert.ok(template, '2493 must resolve to a registered category template');
+  assert.equal(template.templateId, 'cat-2493-v1');
+
+  const productNode = template.buildProductNode(
+    {
+      sellerSku: '2493-SKU-1',
+      name: 'Balloon kit',
+      primaryCategory: '2493',
+      description: 'Party balloon kit',
+      brand: 'GENERICO',
+      taxClass: 'IVA 19%',
+      productData: {
+        Model: 'Katseye',
+        Material: 'Látex',
+      },
+      businessUnits: {
+        OperatorCode: 'facl',
+        Price: 23990,
+        Stock: 2,
+        Status: 'active',
+      },
+    } as any,
+    '2493'
+  );
+
+  const xml = __testables.buildXmlRequest({ Product: productNode });
+  const product = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '' }).parse(xml)?.Request?.Product;
+
+  assert.equal(String(product?.PrimaryCategory), '2493');
+  assert.equal(product?.TaxClass, 'IVA 19%');
+  assert.equal(product?.ProductData?.Model, 'Katseye');
   assert.equal(product?.BusinessUnits?.BusinessUnit?.OperatorCode, 'facl');
 });
 
