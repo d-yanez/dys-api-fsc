@@ -2,6 +2,7 @@ import type {
   CatalogContentScoreInput,
   CatalogImageInput,
   CatalogProductCreateInput,
+  CatalogProductUpdateInput,
   CatalogRepository,
 } from '../../domain/catalog/catalogRepository';
 
@@ -26,6 +27,10 @@ export class CatalogUseCase {
 
   async productCreate(input: CatalogProductCreateInput) {
     return this.repository.productCreate(input);
+  }
+
+  async productUpdate(input: CatalogProductUpdateInput) {
+    return this.repository.productUpdate(input);
   }
 
   async image(input: CatalogImageInput) {

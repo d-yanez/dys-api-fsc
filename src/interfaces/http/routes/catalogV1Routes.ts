@@ -14,6 +14,7 @@ export function createCatalogV1Router(): Router {
   router.get('/categories/:categoryId/attributes', controller.getCategoryAttributes);
   router.post('/content-score', controller.getContentScore);
   router.post('/products/create', controller.productCreate);
+  router.post('/products/update', controller.productUpdate);
   router.post('/products/image', controller.image);
 
   return router;

@@ -10,6 +10,15 @@ export interface CatalogProductCreateInput {
   payloadXml?: string;
 }
 
+export interface CatalogProductUpdateInput {
+  sellerSku: string;
+  name: string;
+  description: string;
+  brand: string;
+  operatorCode?: string;
+  payloadXml?: string;
+}
+
 export interface CatalogImageInput {
   sellerSku: string;
   images: string[];
@@ -33,5 +42,6 @@ export interface CatalogRepository {
   getCategoryAttributes(categoryId: string): Promise<unknown>;
   getContentScore(input: CatalogContentScoreInput): Promise<unknown>;
   productCreate(input: CatalogProductCreateInput): Promise<unknown>;
+  productUpdate(input: CatalogProductUpdateInput): Promise<unknown>;
   image(input: CatalogImageInput): Promise<unknown>;
 }

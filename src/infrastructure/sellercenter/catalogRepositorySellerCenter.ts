@@ -4,6 +4,7 @@ import type {
   CatalogContentScoreInput,
   CatalogImageInput,
   CatalogProductCreateInput,
+  CatalogProductUpdateInput,
   CatalogRepository,
 } from '../../domain/catalog/catalogRepository';
 import { buildSignedUrl, httpGet, httpPost } from './sellerCenterClient';
@@ -277,6 +278,31 @@ export class CatalogRepositorySellerCenter implements CatalogRepository {
       templateId: isRawPayload ? 'raw-payload' : template?.templateId ?? null,
       raw: parsed,
     };
+  }
+
+  async productUpdate(input: CatalogProductUpdateInput): Promise<unknown> {
+    const { payloadXml } = input;
+    const isRawPayload = payloadXml && payloadXml.trim() !== '';
+    const productNode = isRawPayload
+      ? {}
+      : {
+          SellerSku: requiredString(input.sellerSku, 'sellerSku'),
+          Name: requiredString(input.name, 'name'),
+          Description: requiredString(input.description, 'description'),
+          Brand: requiredString(input.brand, 'brand'),
+          BusinessUnits: { BusinessUnit: { OperatorCode: firstNonEmpty(input.operatorCode, 'facl') } },
+        };
+    const xml = isRawPayload ? String(payloadXml) : buildXmlRequest({ Product: productNode });
+    const { url } = buildSignedUrl({ Action: 'ProductUpdate', Version: '1.0', Format: 'XML' });
+    logger.info({ sellerSku: isRawPayload ? null : productNode.SellerSku, hasDescription: !isRawPayload, payloadFingerprint: isRawPayload ? null : payloadFingerprint({ Product: productNode }) }, 'catalog_product_update_payload_built');
+    const { status, body } = await httpPost(url, xml, { 'Content-Type': 'application/xml', Accept: 'application/xml' });
+    if (status !== 200) throw new Error(`SellerCenter ProductUpdate HTTP ${status}`);
+    const parsed = parseMaybeJsonOrXml(body);
+    const parsedError = extractError(parsed);
+    if (parsedError) throw new Error(`SellerCenter ProductUpdate ErrorResponse${parsedError.code ? ` [${parsedError.code}]` : ''}${parsedError.message ? ` ${parsedError.message}` : ''}`);
+    const feedId = extractFeedId(parsed);
+    if (!feedId) throw new Error('SellerCenter ProductUpdate returned success without feedId');
+    return { ok: true, feedId, raw: parsed };
   }
 
   async image(input: CatalogImageInput): Promise<unknown> {

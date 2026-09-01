@@ -66,6 +66,16 @@ export class CatalogV1Controller {
     }
   };
 
+  productUpdate = async (req: Request, res: Response) => {
+    try {
+      const data = await this.useCase.productUpdate(req.body ?? {});
+      return res.status(200).json(data);
+    } catch (err: any) {
+      logger.error({ err: err?.message }, 'catalog_product_update_failed');
+      return res.status(502).json({ error: 'Error ejecutando ProductUpdate en Falabella Seller Center' });
+    }
+  };
+
   image = async (req: Request, res: Response) => {
     try {
       const data = await this.useCase.image(req.body ?? {});
