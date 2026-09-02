@@ -123,6 +123,41 @@ test('template 2493 carries TaxClass into the Seller Center XML', () => {
   assert.equal(product?.BusinessUnits?.BusinessUnit?.OperatorCode, 'facl');
 });
 
+test('template 2065 resolves and builds ProductCreate XML with its category', () => {
+  const template = __testables.resolveCategoryTemplate('2065');
+  assert.ok(template, '2065 must resolve to a registered category template');
+  assert.equal(template.templateId, 'cat-2065-v1');
+
+  const productNode = template.buildProductNode(
+    {
+      sellerSku: '2065-SKU-1',
+      name: 'Card binder',
+      primaryCategory: '2065',
+      description: 'Trading card binder',
+      brand: 'GENERICO',
+      productData: {
+        Model: 'Lomo Cards',
+        Material: 'Polypropylene',
+      },
+      businessUnits: {
+        OperatorCode: 'facl',
+        Price: 19990,
+        Stock: 2,
+        Status: 'active',
+      },
+    } as any,
+    '2065'
+  );
+
+  const xml = __testables.buildXmlRequest({ Product: productNode });
+  const product = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '' }).parse(xml)?.Request?.Product;
+
+  assert.equal(String(product?.SellerSku), '2065-SKU-1');
+  assert.equal(String(product?.PrimaryCategory), '2065');
+  assert.equal(product?.ProductData?.Model, 'Lomo Cards');
+  assert.equal(product?.BusinessUnits?.BusinessUnit?.OperatorCode, 'facl');
+});
+
 test('template 3367 existe y arma ProductCreate con nodos requeridos', () => {
   const template = __testables.CATEGORY_TEMPLATE_REGISTRY['3367'];
   assert.ok(template);
