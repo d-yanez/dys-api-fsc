@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { XMLParser } from 'fast-xml-parser';
-import { __testables } from '../infrastructure/sellercenter/catalogRepositorySellerCenter';
+import {
+  __testables,
+  CatalogRepositorySellerCenter,
+} from '../infrastructure/sellercenter/catalogRepositorySellerCenter';
 
 test('resolveCategoryId prioriza categoryId numérico', () => {
   const categoryId = __testables.resolveCategoryId({
@@ -156,6 +159,37 @@ test('template 2065 resolves and builds ProductCreate XML with its category', ()
   assert.equal(String(product?.PrimaryCategory), '2065');
   assert.equal(product?.ProductData?.Model, 'Lomo Cards');
   assert.equal(product?.BusinessUnits?.BusinessUnit?.OperatorCode, 'facl');
+});
+
+test('template 2721 resolves and preserves the plush ProductCreate schema', () => {
+  const template = __testables.resolveCategoryTemplate('2721');
+  assert.ok(template, '2721 must resolve to a registered category template');
+  assert.equal(template.templateId, 'cat-2721-v1');
+  const productNode = template.buildProductNode({
+    sellerSku: '4457868598', parentSku: '4457868598', productId: '0810189760387',
+    name: 'Peluche sorpresa Blox Fruits Serie 4 10 cm con código DLC', primaryCategory: '2721',
+    description: 'Peluche personaje de felpa.', brand: 'GENERICO', taxClass: 'IVA 19%', variation: '...',
+    productData: { Model: 'Series 4 Blox Fruits', TipoDeMunecaPeluche: 'Peluche personaje', TipoDePeluche: 'Personaje', Material: 'Felpa', Alto: 10, Ancho: 11, Largo: '11 cm', PackageWidth: 11, PackageLength: 11, PackageHeight: 11, PackageWeight: 0.2 },
+    businessUnits: { OperatorCode: 'facl', Price: 65990, Stock: 2, Status: 'active' },
+  } as any, '2721');
+  const product = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '' }).parse(__testables.buildXmlRequest({ Product: productNode }))?.Request?.Product;
+  assert.equal(String(product?.SellerSku), '4457868598');
+  assert.equal(String(product?.ParentSku), '4457868598');
+  assert.equal(String(product?.ProductId).padStart(13, '0'), '0810189760387');
+  assert.equal(String(product?.PrimaryCategory), '2721');
+  assert.equal(product?.Brand, 'GENERICO');
+  assert.equal(product?.TaxClass, 'IVA 19%');
+  assert.equal(product?.ProductData?.TipoDePeluche, 'Personaje');
+  assert.equal(product?.ProductData?.Material, 'Felpa');
+  assert.equal(product?.ProductData?.PackageWeight, 0.2);
+  assert.equal(product?.BusinessUnits?.BusinessUnit?.OperatorCode, 'facl');
+  assert.equal(product?.BusinessUnits?.BusinessUnit?.Stock, 2);
+});
+
+test('unknown categories fail closed before ProductCreate reaches Seller Center', async () => {
+  assert.equal(__testables.resolveCategoryTemplate('999999'), undefined);
+  const repository = new CatalogRepositorySellerCenter();
+  await assert.rejects(repository.productCreate({ sellerSku: 'unknown-category-sku', name: 'Unknown category product', primaryCategory: '999999', description: 'desc', brand: 'GENERICO' }), /category_template_not_found: 999999/);
 });
 
 test('template 3367 existe y arma ProductCreate con nodos requeridos', () => {

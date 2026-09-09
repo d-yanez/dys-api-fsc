@@ -154,6 +154,10 @@ const CATEGORY_TEMPLATE_REGISTRY: Record<string, CategoryTemplate> = {
     templateId: 'cat-2065-v1',
     buildProductNode: buildDefaultCategoryProductNode,
   },
+  '2721': {
+    templateId: 'cat-2721-v1',
+    buildProductNode: buildDefaultCategoryProductNode,
+  },
   '3367': {
     templateId: 'cat-3367-v1',
     buildProductNode: buildDefaultCategoryProductNode,
@@ -220,13 +224,13 @@ export class CatalogRepositorySellerCenter implements CatalogRepository {
 
   async productCreate(input: CatalogProductCreateInput): Promise<unknown> {
     const { payloadXml } = input;
-    const { url } = buildSignedUrl({ Action: 'ProductCreate', Version: '1.0', Format: 'XML' });
     const categoryId = resolveCategoryId(input);
     const template = resolveCategoryTemplate(categoryId);
     const isRawPayload = payloadXml && payloadXml.trim() !== '';
     if (!isRawPayload && !template) {
       throw new Error(`category_template_not_found: ${categoryId || 'missing'}`);
     }
+    const { url } = buildSignedUrl({ Action: 'ProductCreate', Version: '1.0', Format: 'XML' });
     const productNode = !isRawPayload && template ? template.buildProductNode(input, categoryId) : {};
     const effectivePayload = !isRawPayload ? { Product: productNode } : {};
     const xml = isRawPayload ? String(payloadXml) : buildXmlRequest(effectivePayload);
