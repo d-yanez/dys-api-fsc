@@ -6,6 +6,7 @@ import {
   DurableInvoicePDFIdempotencyStore,
   fingerprintInvoicePDFUpload,
   hashIdempotencyKey,
+  IdempotencyCompletionTimeoutError,
   IdempotencyOperationInProgressError,
   InvoicePDFIdempotencyPersistence,
 } from '../application/services/invoicePDFIdempotency';
@@ -260,18 +261,56 @@ test('UploadInvoicePDFUseCase cannot finalize after lease ownership is lost', as
   assert.equal(persistence.records.get(keyHash).status, 'processing');
 });
 
-test('UploadInvoicePDFUseCase releases ownership when cancellation wins after the upload returns', async () => {
+test('UploadInvoicePDFUseCase persists success when cancellation arrives after the upload returns', async () => {
   const persistence = new FakePersistence();
   const abort = new AbortController();
   const store = createIdempotencyStore(persistence, 'cancelled-owner');
+  let calls = 0;
 
-  await assert.rejects(
-    () => store.execute('cancelled-owner', fingerprintInvoicePDFUpload(validInput), async () => {
+  const first = await store.execute('cancelled-owner', fingerprintInvoicePDFUpload(validInput), async () => {
+      calls += 1;
       abort.abort();
       return new FakeRepo().uploadPDF(validInput);
-    }, abort.signal),
-    (error: unknown) => error instanceof Error && error.name === 'AbortError'
+    }, abort.signal);
+  const replay = await createIdempotencyStore(persistence, 'replay-owner').execute(
+    'cancelled-owner',
+    fingerprintInvoicePDFUpload(validInput),
+    async () => {
+      calls += 1;
+      return new FakeRepo().uploadPDF(validInput);
+    }
   );
 
-  assert.equal(persistence.records.size, 0);
+  assert.equal(first.replayed, false);
+  assert.equal(replay.replayed, true);
+  assert.deepEqual(replay.result, first.result);
+  assert.equal(calls, 1);
+  assert.equal([...persistence.records.values()][0].status, 'succeeded');
+});
+
+test('UploadInvoicePDFUseCase bounds detached completion without releasing ownership', async () => {
+  class HungCompletionPersistence extends FakePersistence {
+    async complete(): Promise<void> {
+      await new Promise<void>(() => undefined);
+    }
+  }
+  const persistence = new HungCompletionPersistence();
+  const store = new DurableInvoicePDFIdempotencyStore(
+    persistence,
+    86_400_000,
+    600_000,
+    1,
+    5_000,
+    Date.now,
+    () => 'completion-owner',
+    undefined,
+    20
+  );
+
+  await assert.rejects(
+    () => store.execute('hung-completion', fingerprintInvoicePDFUpload(validInput), () => new FakeRepo().uploadPDF(validInput)),
+    IdempotencyCompletionTimeoutError
+  );
+  assert.equal([...persistence.records.values()][0].ownerId, 'completion-owner');
+  assert.equal([...persistence.records.values()][0].status, 'processing');
 });

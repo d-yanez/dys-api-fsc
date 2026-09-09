@@ -34,6 +34,14 @@ export class IdempotencyOperationInProgressError extends Error {
 }
 
 export const IDEMPOTENCY_PROCESSING_WAIT_TIMEOUT_MS = 1_000;
+export const IDEMPOTENCY_COMPLETION_TIMEOUT_MS = 1_000;
+
+export class IdempotencyCompletionTimeoutError extends Error {
+  constructor() {
+    super('Idempotency completion timed out');
+    this.name = 'IdempotencyCompletionTimeoutError';
+  }
+}
 
 export function createAbortError(): Error {
   const error = new Error('Request was aborted');
@@ -66,7 +74,8 @@ export class DurableInvoicePDFIdempotencyStore implements InvoicePDFIdempotencyS
     private readonly waitTimeoutMs = IDEMPOTENCY_PROCESSING_WAIT_TIMEOUT_MS,
     private readonly now: () => number = Date.now,
     private readonly createOwnerId: () => string = randomUUID,
-    private readonly sleep: (ms: number, signal?: AbortSignal) => Promise<void> = abortableSleep
+    private readonly sleep: (ms: number, signal?: AbortSignal) => Promise<void> = abortableSleep,
+    private readonly completionTimeoutMs = IDEMPOTENCY_COMPLETION_TIMEOUT_MS
   ) {}
 
   async execute(key: string, fingerprint: string, operation: () => Promise<InvoicePDFUploadResult>, signal?: AbortSignal): Promise<{ result: InvoicePDFUploadResult; replayed: boolean }> {
@@ -96,14 +105,32 @@ export class DurableInvoicePDFIdempotencyStore implements InvoicePDFIdempotencyS
       let result: InvoicePDFUploadResult;
       try {
         result = await operation();
-        if (signal?.aborted) throw createAbortError();
       } catch (error) {
         await this.persistence.release({ keyHash, fingerprint, ownerId }).catch(() => undefined);
         throw error;
       }
       const completedAt = this.now();
-      await this.persistence.complete({ keyHash, fingerprint, ownerId, result, now: completedAt, expiresAt: completedAt + this.successTtlMs });
+      await this.completeWithinDeadline({
+        keyHash,
+        fingerprint,
+        ownerId,
+        result,
+        now: completedAt,
+        expiresAt: completedAt + this.successTtlMs,
+      });
       return { result, replayed: false };
+    }
+  }
+
+  private async completeWithinDeadline(params: Parameters<InvoicePDFIdempotencyPersistence['complete']>[0]): Promise<void> {
+    let timeout: NodeJS.Timeout | undefined;
+    const deadline = new Promise<never>((_, reject) => {
+      timeout = setTimeout(() => reject(new IdempotencyCompletionTimeoutError()), this.completionTimeoutMs);
+    });
+    try {
+      await Promise.race([this.persistence.complete(params), deadline]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
     }
   }
 }

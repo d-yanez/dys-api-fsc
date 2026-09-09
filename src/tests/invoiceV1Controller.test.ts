@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { InvoiceV1Controller } from '../interfaces/http/controllers/invoiceV1Controller';
 import { SellerCenterInvoicePDFError, SellerCenterInvoicePDFTransientError } from '../infrastructure/sellercenter/invoicePdfRepositorySellerCenter';
-import { IdempotencyOperationInProgressError } from '../application/services/invoicePDFIdempotency';
+import { IdempotencyCompletionTimeoutError, IdempotencyOperationInProgressError } from '../application/services/invoicePDFIdempotency';
 
 interface MockResponse {
   statusCode: number;
@@ -142,4 +142,20 @@ test('InvoiceV1Controller maps a bounded upstream timeout to retryable 504', asy
 
   assert.equal(res.statusCode, 504);
   assert.equal((res.body as any).code, 'UPSTREAM_TIMEOUT');
+});
+
+test('InvoiceV1Controller returns retryable 503 when detached completion times out', async () => {
+  const controller = new InvoiceV1Controller({
+    async execute() {
+      throw new IdempotencyCompletionTimeoutError();
+    },
+  });
+  const req = { body: {}, method: 'POST', originalUrl: '/v1/invoices/pdf', headers: {} } as any;
+  const res = createMockResponse();
+
+  await controller.uploadInvoicePDF(req, res as any);
+
+  assert.equal(res.statusCode, 503);
+  assert.equal(res.headers['Retry-After'], '1');
+  assert.equal((res.body as any).code, 'IDEMPOTENCY_COMPLETION_TIMEOUT');
 });

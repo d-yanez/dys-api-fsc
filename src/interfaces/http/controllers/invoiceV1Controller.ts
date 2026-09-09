@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { logger } from '../../../infrastructure/logger/logger';
 import { SellerCenterInvoicePDFError, SellerCenterInvoicePDFTransientError } from '../../../infrastructure/sellercenter/invoicePdfRepositorySellerCenter';
-import { IdempotencyKeyConflictError, IdempotencyOperationInProgressError } from '../../../application/services/invoicePDFIdempotency';
+import { IdempotencyCompletionTimeoutError, IdempotencyKeyConflictError, IdempotencyOperationInProgressError } from '../../../application/services/invoicePDFIdempotency';
 
 interface UploadInvoicePDFExecutor {
   execute(input: {
@@ -73,6 +73,17 @@ export class InvoiceV1Controller {
           ok: false,
           action: 'SetInvoicePDF',
           code: 'IDEMPOTENCY_OPERATION_IN_PROGRESS',
+          message: err.message,
+          requestId: null,
+        });
+      }
+
+      if (err instanceof IdempotencyCompletionTimeoutError) {
+        res.setHeader('Retry-After', '1');
+        return res.status(503).json({
+          ok: false,
+          action: 'SetInvoicePDF',
+          code: 'IDEMPOTENCY_COMPLETION_TIMEOUT',
           message: err.message,
           requestId: null,
         });
