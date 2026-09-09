@@ -1,0 +1,27 @@
+name: Feature request
+description: Propose a user-visible capability with verification criteria
+title: "[Feature]: "
+labels:
+  - "type:feature"
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Describe the capability and business outcome.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: List affected services, interfaces, and explicit non-goals.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification
+      description: Describe tests and acceptance criteria.
+    validations:
+      required: true
