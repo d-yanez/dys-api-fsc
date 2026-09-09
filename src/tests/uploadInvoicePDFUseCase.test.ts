@@ -4,6 +4,9 @@ import { UploadInvoicePDFUseCase } from '../application/use-cases/uploadInvoiceP
 import { InvoicePDFRepository } from '../domain/invoice/invoicePdfRepository';
 import {
   DurableInvoicePDFIdempotencyStore,
+  fingerprintInvoicePDFUpload,
+  hashIdempotencyKey,
+  IdempotencyOperationInProgressError,
   InvoicePDFIdempotencyPersistence,
 } from '../application/services/invoicePDFIdempotency';
 
@@ -60,7 +63,7 @@ class FakePersistence implements InvoicePDFIdempotencyPersistence {
 }
 
 function createIdempotencyStore(persistence = new FakePersistence(), ownerId = 'owner-1') {
-  return new DurableInvoicePDFIdempotencyStore(persistence, 86_400_000, 600_000, 1, Date.now, () => ownerId);
+  return new DurableInvoicePDFIdempotencyStore(persistence, 86_400_000, 600_000, 1, 5_000, Date.now, () => ownerId);
 }
 
 test('UploadInvoicePDFUseCase normalizes and delegates', async () => {
@@ -195,4 +198,80 @@ test('UploadInvoicePDFUseCase does not retain failed idempotent operations', asy
 
   assert.equal(result.ok, true);
   assert.equal(calls, 2);
+});
+
+test('UploadInvoicePDFUseCase bounds waiting for a processing request', async () => {
+  const persistence = new FakePersistence();
+  const key = 'bounded-waiter';
+  const fingerprint = fingerprintInvoicePDFUpload(validInput);
+  await persistence.acquire({ keyHash: hashIdempotencyKey(key), fingerprint, ownerId: 'other', now: 0, leaseExpiresAt: 600_000, expiresAt: 86_400_000 });
+  let now = 0;
+  const store = new DurableInvoicePDFIdempotencyStore(
+    persistence,
+    86_400_000,
+    600_000,
+    10,
+    30,
+    () => now,
+    () => 'waiter',
+    async (ms) => { now += ms; }
+  );
+  let calls = 0;
+
+  await assert.rejects(
+    () => store.execute(key, fingerprint, async () => { calls += 1; return new FakeRepo().uploadPDF(validInput); }),
+    IdempotencyOperationInProgressError
+  );
+  assert.equal(calls, 0);
+});
+
+test('UploadInvoicePDFUseCase cancels a waiter without executing the upload', async () => {
+  const persistence = new FakePersistence();
+  const key = 'cancelled-waiter';
+  const fingerprint = fingerprintInvoicePDFUpload(validInput);
+  await persistence.acquire({ keyHash: hashIdempotencyKey(key), fingerprint, ownerId: 'other', now: Date.now(), leaseExpiresAt: Date.now() + 600_000, expiresAt: Date.now() + 86_400_000 });
+  const abort = new AbortController();
+  let calls = 0;
+  setImmediate(() => abort.abort());
+
+  await assert.rejects(
+    () => createIdempotencyStore(persistence, 'waiter').execute(key, fingerprint, async () => { calls += 1; return new FakeRepo().uploadPDF(validInput); }, abort.signal),
+    (error: unknown) => error instanceof Error && error.name === 'AbortError'
+  );
+  assert.equal(calls, 0);
+});
+
+test('UploadInvoicePDFUseCase cannot finalize after lease ownership is lost', async () => {
+  const persistence = new FakePersistence();
+  const key = 'lost-owner';
+  const keyHash = hashIdempotencyKey(key);
+  const fingerprint = fingerprintInvoicePDFUpload(validInput);
+  const store = createIdempotencyStore(persistence, 'original-owner');
+
+  await assert.rejects(
+    () => store.execute(key, fingerprint, async () => {
+      const record = persistence.records.get(keyHash);
+      persistence.records.set(keyHash, { ...record, ownerId: 'replacement-owner' });
+      return new FakeRepo().uploadPDF(validInput);
+    }),
+    /lost lease/
+  );
+  assert.equal(persistence.records.get(keyHash).ownerId, 'replacement-owner');
+  assert.equal(persistence.records.get(keyHash).status, 'processing');
+});
+
+test('UploadInvoicePDFUseCase releases ownership when cancellation wins after the upload returns', async () => {
+  const persistence = new FakePersistence();
+  const abort = new AbortController();
+  const store = createIdempotencyStore(persistence, 'cancelled-owner');
+
+  await assert.rejects(
+    () => store.execute('cancelled-owner', fingerprintInvoicePDFUpload(validInput), async () => {
+      abort.abort();
+      return new FakeRepo().uploadPDF(validInput);
+    }, abort.signal),
+    (error: unknown) => error instanceof Error && error.name === 'AbortError'
+  );
+
+  assert.equal(persistence.records.size, 0);
 });

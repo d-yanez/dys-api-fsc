@@ -8,6 +8,7 @@ import {
 
 export interface UploadInvoicePDFOptions {
   idempotencyKey?: string;
+  signal?: AbortSignal;
 }
 
 export interface InvoicePDFIdempotencyLogEvent {
@@ -73,7 +74,7 @@ export class UploadInvoicePDFUseCase {
 
     const idempotencyKey = options.idempotencyKey?.trim();
     if (!idempotencyKey) {
-      return this.repository.uploadPDF(normalizedInput);
+      return this.repository.uploadPDF(normalizedInput, { signal: options.signal });
     }
     if (!this.idempotencyStore) {
       throw new Error('Invoice PDF idempotency storage is unavailable');
@@ -87,7 +88,8 @@ export class UploadInvoicePDFUseCase {
       const execution = await this.idempotencyStore.execute(
         idempotencyKey,
         fingerprintInvoicePDFUpload(normalizedInput),
-        () => this.repository.uploadPDF(normalizedInput)
+        () => this.repository.uploadPDF(normalizedInput, { signal: options.signal }),
+        options.signal
       );
       this.onIdempotencyEvent?.({ event: execution.replayed ? 'replayed' : 'started', keyHash });
       return execution.result;

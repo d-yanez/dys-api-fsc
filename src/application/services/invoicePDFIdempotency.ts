@@ -4,7 +4,7 @@ import { InvoicePDFUploadInput, InvoicePDFUploadResult } from '../../domain/invo
 export type InvoicePDFIdempotencyEvent = 'started' | 'replayed' | 'conflict';
 
 export interface InvoicePDFIdempotencyStore {
-  execute(key: string, fingerprint: string, operation: () => Promise<InvoicePDFUploadResult>): Promise<{ result: InvoicePDFUploadResult; replayed: boolean }>;
+  execute(key: string, fingerprint: string, operation: () => Promise<InvoicePDFUploadResult>, signal?: AbortSignal): Promise<{ result: InvoicePDFUploadResult; replayed: boolean }>;
 }
 
 export type AcquireInvoicePDFIdempotencyResult =
@@ -26,22 +26,56 @@ export class IdempotencyKeyConflictError extends Error {
   }
 }
 
+export class IdempotencyOperationInProgressError extends Error {
+  constructor() {
+    super('An equivalent idempotent request is still processing');
+    this.name = 'IdempotencyOperationInProgressError';
+  }
+}
+
+export const IDEMPOTENCY_PROCESSING_WAIT_TIMEOUT_MS = 1_000;
+
+export function createAbortError(): Error {
+  const error = new Error('Request was aborted');
+  error.name = 'AbortError';
+  return error;
+}
+
+function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(createAbortError());
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(done, ms);
+    function done() {
+      signal?.removeEventListener('abort', aborted);
+      resolve();
+    }
+    function aborted() {
+      clearTimeout(timer);
+      reject(createAbortError());
+    }
+    signal?.addEventListener('abort', aborted, { once: true });
+  });
+}
+
 export class DurableInvoicePDFIdempotencyStore implements InvoicePDFIdempotencyStore {
   constructor(
     private readonly persistence: InvoicePDFIdempotencyPersistence,
     private readonly successTtlMs = 24 * 60 * 60 * 1000,
     private readonly leaseMs = 10 * 60 * 1000,
     private readonly pollIntervalMs = 100,
+    private readonly waitTimeoutMs = IDEMPOTENCY_PROCESSING_WAIT_TIMEOUT_MS,
     private readonly now: () => number = Date.now,
     private readonly createOwnerId: () => string = randomUUID,
-    private readonly sleep: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+    private readonly sleep: (ms: number, signal?: AbortSignal) => Promise<void> = abortableSleep
   ) {}
 
-  async execute(key: string, fingerprint: string, operation: () => Promise<InvoicePDFUploadResult>): Promise<{ result: InvoicePDFUploadResult; replayed: boolean }> {
+  async execute(key: string, fingerprint: string, operation: () => Promise<InvoicePDFUploadResult>, signal?: AbortSignal): Promise<{ result: InvoicePDFUploadResult; replayed: boolean }> {
     const keyHash = hashIdempotencyKey(key);
     const ownerId = this.createOwnerId();
+    const waitDeadline = this.now() + this.waitTimeoutMs;
 
     for (;;) {
+      if (signal?.aborted) throw createAbortError();
       const now = this.now();
       const acquired = await this.persistence.acquire({
         keyHash,
@@ -54,13 +88,15 @@ export class DurableInvoicePDFIdempotencyStore implements InvoicePDFIdempotencyS
       if (acquired.state === 'conflict') throw new IdempotencyKeyConflictError();
       if (acquired.state === 'replay') return { result: acquired.result, replayed: true };
       if (acquired.state === 'processing') {
-        await this.sleep(Math.max(1, Math.min(this.pollIntervalMs, acquired.leaseExpiresAt - now)));
+        if (now >= waitDeadline) throw new IdempotencyOperationInProgressError();
+        await this.sleep(Math.max(1, Math.min(this.pollIntervalMs, acquired.leaseExpiresAt - now, waitDeadline - now)), signal);
         continue;
       }
 
       let result: InvoicePDFUploadResult;
       try {
         result = await operation();
+        if (signal?.aborted) throw createAbortError();
       } catch (error) {
         await this.persistence.release({ keyHash, fingerprint, ownerId }).catch(() => undefined);
         throw error;
