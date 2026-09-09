@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { logger } from '../../../infrastructure/logger/logger';
 import { SellerCenterInvoicePDFError } from '../../../infrastructure/sellercenter/invoicePdfRepositorySellerCenter';
+import { IdempotencyKeyConflictError } from '../../../application/services/invoicePDFIdempotency';
 
 interface UploadInvoicePDFExecutor {
   execute(input: {
@@ -11,7 +12,7 @@ interface UploadInvoicePDFExecutor {
     operatorCode: string;
     invoiceDocumentFormat: 'pdf';
     invoiceDocument: string;
-  }): Promise<unknown>;
+  }, options?: { idempotencyKey?: string }): Promise<unknown>;
 }
 
 export class InvoiceV1Controller {
@@ -19,7 +20,13 @@ export class InvoiceV1Controller {
 
   uploadInvoicePDF = async (req: Request, res: Response) => {
     try {
-      const result = await this.uploadUseCase.execute(req.body);
+      const idempotencyKeyHeader = req.headers['idempotency-key'];
+      if (Array.isArray(idempotencyKeyHeader)) {
+        throw new Error('Invalid Idempotency-Key');
+      }
+      const result = await this.uploadUseCase.execute(req.body, {
+        idempotencyKey: idempotencyKeyHeader,
+      });
       return res.status(200).json(result);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -41,6 +48,16 @@ export class InvoiceV1Controller {
           action: 'SetInvoicePDF',
           code: 'VALIDATION_ERROR',
           message,
+          requestId: null,
+        });
+      }
+
+      if (err instanceof IdempotencyKeyConflictError) {
+        return res.status(409).json({
+          ok: false,
+          action: 'SetInvoicePDF',
+          code: 'IDEMPOTENCY_KEY_CONFLICT',
+          message: err.message,
           requestId: null,
         });
       }

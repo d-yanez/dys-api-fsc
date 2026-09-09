@@ -65,3 +65,41 @@ test('InvoiceV1Controller maps upstream HTTP message to 502', async () => {
   await controller.uploadInvoicePDF(req, res as any);
   assert.equal(res.statusCode, 502);
 });
+
+test('InvoiceV1Controller passes Idempotency-Key to the use case', async () => {
+  let receivedOptions: unknown;
+  const controller = new InvoiceV1Controller({
+    async execute(_input, options) {
+      receivedOptions = options;
+      return { ok: true };
+    },
+  });
+  const req = {
+    body: {},
+    method: 'POST',
+    originalUrl: '/v1/invoices/pdf',
+    headers: { 'idempotency-key': 'dte-order-5' },
+  } as any;
+  const res = createMockResponse();
+
+  await controller.uploadInvoicePDF(req, res as any);
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(receivedOptions, { idempotencyKey: 'dte-order-5' });
+});
+
+test('InvoiceV1Controller maps conflicting Idempotency-Key reuse to 409', async () => {
+  const { IdempotencyKeyConflictError } = await import('../application/services/invoicePDFIdempotency');
+  const controller = new InvoiceV1Controller({
+    async execute() {
+      throw new IdempotencyKeyConflictError();
+    },
+  });
+  const req = { body: {}, method: 'POST', originalUrl: '/v1/invoices/pdf', headers: {} } as any;
+  const res = createMockResponse();
+
+  await controller.uploadInvoicePDF(req, res as any);
+
+  assert.equal(res.statusCode, 409);
+  assert.equal((res.body as any).code, 'IDEMPOTENCY_KEY_CONFLICT');
+});
