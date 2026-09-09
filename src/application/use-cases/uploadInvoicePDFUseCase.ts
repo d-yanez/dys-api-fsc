@@ -2,7 +2,6 @@ import { InvoicePDFRepository, InvoicePDFUploadInput, InvoicePDFUploadResult } f
 import {
   fingerprintInvoicePDFUpload,
   hashIdempotencyKey,
-  InMemoryInvoicePDFIdempotencyStore,
   InvoicePDFIdempotencyEvent,
   InvoicePDFIdempotencyStore,
 } from '../services/invoicePDFIdempotency';
@@ -19,7 +18,7 @@ export interface InvoicePDFIdempotencyLogEvent {
 export class UploadInvoicePDFUseCase {
   constructor(
     private readonly repository: InvoicePDFRepository,
-    private readonly idempotencyStore: InvoicePDFIdempotencyStore = new InMemoryInvoicePDFIdempotencyStore(),
+    private readonly idempotencyStore?: InvoicePDFIdempotencyStore,
     private readonly onIdempotencyEvent?: (event: InvoicePDFIdempotencyLogEvent) => void
   ) {}
 
@@ -75,6 +74,9 @@ export class UploadInvoicePDFUseCase {
     const idempotencyKey = options.idempotencyKey?.trim();
     if (!idempotencyKey) {
       return this.repository.uploadPDF(normalizedInput);
+    }
+    if (!this.idempotencyStore) {
+      throw new Error('Invoice PDF idempotency storage is unavailable');
     }
     if (idempotencyKey.length > 200 || !/^[\x21-\x7E]+$/.test(idempotencyKey)) {
       throw new Error('Invalid Idempotency-Key');

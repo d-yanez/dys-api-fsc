@@ -1,20 +1,22 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { InvoicePDFUploadInput, InvoicePDFUploadResult } from '../../domain/invoice/invoicePdfRepository';
 
 export type InvoicePDFIdempotencyEvent = 'started' | 'replayed' | 'conflict';
 
 export interface InvoicePDFIdempotencyStore {
-  execute(
-    key: string,
-    fingerprint: string,
-    operation: () => Promise<InvoicePDFUploadResult>
-  ): Promise<{ result: InvoicePDFUploadResult; replayed: boolean }>;
+  execute(key: string, fingerprint: string, operation: () => Promise<InvoicePDFUploadResult>): Promise<{ result: InvoicePDFUploadResult; replayed: boolean }>;
 }
 
-interface StoredOperation {
-  fingerprint: string;
-  expiresAt: number;
-  promise: Promise<InvoicePDFUploadResult>;
+export type AcquireInvoicePDFIdempotencyResult =
+  | { state: 'acquired' }
+  | { state: 'processing'; leaseExpiresAt: number }
+  | { state: 'replay'; result: InvoicePDFUploadResult }
+  | { state: 'conflict' };
+
+export interface InvoicePDFIdempotencyPersistence {
+  acquire(params: { keyHash: string; fingerprint: string; ownerId: string; now: number; leaseExpiresAt: number; expiresAt: number }): Promise<AcquireInvoicePDFIdempotencyResult>;
+  complete(params: { keyHash: string; fingerprint: string; ownerId: string; result: InvoicePDFUploadResult; now: number; expiresAt: number }): Promise<void>;
+  release(params: { keyHash: string; fingerprint: string; ownerId: string }): Promise<void>;
 }
 
 export class IdempotencyKeyConflictError extends Error {
@@ -24,87 +26,65 @@ export class IdempotencyKeyConflictError extends Error {
   }
 }
 
-export class InMemoryInvoicePDFIdempotencyStore implements InvoicePDFIdempotencyStore {
-  private readonly operations = new Map<string, StoredOperation>();
-
+export class DurableInvoicePDFIdempotencyStore implements InvoicePDFIdempotencyStore {
   constructor(
-    private readonly ttlMs = 24 * 60 * 60 * 1000,
-    private readonly maxEntries = 10_000,
-    private readonly now: () => number = Date.now
+    private readonly persistence: InvoicePDFIdempotencyPersistence,
+    private readonly successTtlMs = 24 * 60 * 60 * 1000,
+    private readonly leaseMs = 10 * 60 * 1000,
+    private readonly pollIntervalMs = 100,
+    private readonly now: () => number = Date.now,
+    private readonly createOwnerId: () => string = randomUUID,
+    private readonly sleep: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
   ) {}
 
-  async execute(
-    key: string,
-    fingerprint: string,
-    operation: () => Promise<InvoicePDFUploadResult>
-  ): Promise<{ result: InvoicePDFUploadResult; replayed: boolean }> {
-    this.removeExpired();
+  async execute(key: string, fingerprint: string, operation: () => Promise<InvoicePDFUploadResult>): Promise<{ result: InvoicePDFUploadResult; replayed: boolean }> {
+    const keyHash = hashIdempotencyKey(key);
+    const ownerId = this.createOwnerId();
 
-    const existing = this.operations.get(key);
-    if (existing) {
-      if (existing.fingerprint !== fingerprint) {
-        throw new IdempotencyKeyConflictError();
+    for (;;) {
+      const now = this.now();
+      const acquired = await this.persistence.acquire({
+        keyHash,
+        fingerprint,
+        ownerId,
+        now,
+        leaseExpiresAt: now + this.leaseMs,
+        expiresAt: now + this.successTtlMs,
+      });
+      if (acquired.state === 'conflict') throw new IdempotencyKeyConflictError();
+      if (acquired.state === 'replay') return { result: acquired.result, replayed: true };
+      if (acquired.state === 'processing') {
+        await this.sleep(Math.max(1, Math.min(this.pollIntervalMs, acquired.leaseExpiresAt - now)));
+        continue;
       }
 
-      return { result: await existing.promise, replayed: true };
-    }
-
-    this.evictOldestIfFull();
-    const promise = operation();
-    this.operations.set(key, {
-      fingerprint,
-      expiresAt: this.now() + this.ttlMs,
-      promise,
-    });
-
-    try {
-      return { result: await promise, replayed: false };
-    } catch (error) {
-      if (this.operations.get(key)?.promise === promise) {
-        this.operations.delete(key);
+      let result: InvoicePDFUploadResult;
+      try {
+        result = await operation();
+      } catch (error) {
+        await this.persistence.release({ keyHash, fingerprint, ownerId }).catch(() => undefined);
+        throw error;
       }
-      throw error;
-    }
-  }
-
-  private removeExpired(): void {
-    const now = this.now();
-    for (const [key, operation] of this.operations) {
-      if (operation.expiresAt <= now) {
-        this.operations.delete(key);
-      }
-    }
-  }
-
-  private evictOldestIfFull(): void {
-    if (this.operations.size < this.maxEntries) {
-      return;
-    }
-
-    const oldestKey = this.operations.keys().next().value as string | undefined;
-    if (oldestKey !== undefined) {
-      this.operations.delete(oldestKey);
+      const completedAt = this.now();
+      await this.persistence.complete({ keyHash, fingerprint, ownerId, result, now: completedAt, expiresAt: completedAt + this.successTtlMs });
+      return { result, replayed: false };
     }
   }
 }
 
 export function fingerprintInvoicePDFUpload(input: InvoicePDFUploadInput): string {
   const documentHash = createHash('sha256').update(input.invoiceDocument).digest('hex');
-  return createHash('sha256')
-    .update(
-      JSON.stringify({
-        orderItemIds: input.orderItemIds,
-        invoiceNumber: input.invoiceNumber,
-        invoiceDate: input.invoiceDate,
-        invoiceType: input.invoiceType,
-        operatorCode: input.operatorCode,
-        invoiceDocumentFormat: input.invoiceDocumentFormat,
-        documentHash,
-      })
-    )
-    .digest('hex');
+  return createHash('sha256').update(JSON.stringify({
+    orderItemIds: input.orderItemIds,
+    invoiceNumber: input.invoiceNumber,
+    invoiceDate: input.invoiceDate,
+    invoiceType: input.invoiceType,
+    operatorCode: input.operatorCode,
+    invoiceDocumentFormat: input.invoiceDocumentFormat,
+    documentHash,
+  })).digest('hex');
 }
 
 export function hashIdempotencyKey(key: string): string {
-  return createHash('sha256').update(key).digest('hex').slice(0, 16);
+  return createHash('sha256').update(key).digest('hex');
 }

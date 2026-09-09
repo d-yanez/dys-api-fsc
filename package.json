@@ -13,6 +13,7 @@
     "deps:policy:lockfile": "node -e \"const fs=require('fs');const f=fs.existsSync('pnpm-lock.yaml')?'pnpm-lock.yaml':(fs.existsSync('package-lock.json')?'package-lock.json':null); if(!f){console.log('no lockfile found');process.exit(0)} const t=fs.readFileSync(f,'utf8'); const hosts=new Set(); if(f==='package-lock.json'){ for(const m of t.matchAll(/\\\"(?:resolved|tarball)\\\"\\s*:\\s*\\\"https?:\\\\/\\\\/([^\\\\/\\\"\\\\s]+)/g)){ hosts.add(m[1]); } } else { for(const m of t.matchAll(/(?:resolved|tarball):\\s*https?:\\/\\/([^\\/\\s]+)/g)){ hosts.add(m[1]); } } const bad=[...hosts].filter(h=>h!=='registry.npmjs.org'); if(bad.length){console.error('Disallowed lockfile hosts:\\n'+bad.join('\\n'));process.exit(1)} console.log('lockfile host policy ok')\""
   },
   "dependencies": {
+    "@google-cloud/firestore": "7.11.6",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "fast-xml-parser": "^4.5.5",
