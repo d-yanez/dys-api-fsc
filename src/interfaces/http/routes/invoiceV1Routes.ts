@@ -4,13 +4,17 @@ import { UploadInvoicePDFUseCase } from '../../../application/use-cases/uploadIn
 import { InvoiceV1Controller } from '../controllers/invoiceV1Controller';
 import { logger } from '../../../infrastructure/logger/logger';
 import { DurableInvoicePDFIdempotencyStore } from '../../../application/services/invoicePDFIdempotency';
-import { FirestoreInvoicePDFIdempotencyPersistence } from '../../../infrastructure/firestore/invoicePDFIdempotencyPersistence';
+import { createMongoInvoicePDFIdempotencyPersistence } from '../../../infrastructure/mongodb/invoicePDFIdempotencyPersistence';
+import { env } from '../../../infrastructure/config/env';
 
 export function createInvoiceV1Router(executor?: UploadInvoicePDFUseCase): Router {
   const router = Router();
   const useCase =
     executor ??
-    new UploadInvoicePDFUseCase(new InvoicePDFRepositorySellerCenter(), new DurableInvoicePDFIdempotencyStore(new FirestoreInvoicePDFIdempotencyPersistence()), (event) => {
+    new UploadInvoicePDFUseCase(new InvoicePDFRepositorySellerCenter(), new DurableInvoicePDFIdempotencyStore(createMongoInvoicePDFIdempotencyPersistence({
+      uri: env.mongodbUri,
+      dbName: env.mongodbDbName,
+    })), (event) => {
       logger.info(
         { idempotencyEvent: event.event, idempotencyKeyHash: event.keyHash },
         'SetInvoicePDF idempotency event'
