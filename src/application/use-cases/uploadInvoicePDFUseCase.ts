@@ -1,9 +1,29 @@
 import { InvoicePDFRepository, InvoicePDFUploadInput, InvoicePDFUploadResult } from '../../domain/invoice/invoicePdfRepository';
+import {
+  fingerprintInvoicePDFUpload,
+  hashIdempotencyKey,
+  InvoicePDFIdempotencyEvent,
+  InvoicePDFIdempotencyStore,
+} from '../services/invoicePDFIdempotency';
+
+export interface UploadInvoicePDFOptions {
+  idempotencyKey?: string;
+  signal?: AbortSignal;
+}
+
+export interface InvoicePDFIdempotencyLogEvent {
+  event: InvoicePDFIdempotencyEvent;
+  keyHash: string;
+}
 
 export class UploadInvoicePDFUseCase {
-  constructor(private readonly repository: InvoicePDFRepository) {}
+  constructor(
+    private readonly repository: InvoicePDFRepository,
+    private readonly idempotencyStore?: InvoicePDFIdempotencyStore,
+    private readonly onIdempotencyEvent?: (event: InvoicePDFIdempotencyLogEvent) => void
+  ) {}
 
-  async execute(input: InvoicePDFUploadInput): Promise<InvoicePDFUploadResult> {
+  async execute(input: InvoicePDFUploadInput, options: UploadInvoicePDFOptions = {}): Promise<InvoicePDFUploadResult> {
     const orderItemIds = Array.isArray(input.orderItemIds)
       ? input.orderItemIds.map((v) => String(v).trim()).filter(Boolean)
       : [];
@@ -42,7 +62,7 @@ export class UploadInvoicePDFUseCase {
       throw new Error('Invalid invoiceDocument');
     }
 
-    return this.repository.uploadPDF({
+    const normalizedInput: InvoicePDFUploadInput = {
       orderItemIds,
       invoiceNumber,
       invoiceDate,
@@ -50,6 +70,34 @@ export class UploadInvoicePDFUseCase {
       operatorCode,
       invoiceDocumentFormat: 'pdf',
       invoiceDocument,
-    });
+    };
+
+    const idempotencyKey = options.idempotencyKey?.trim();
+    if (!idempotencyKey) {
+      return this.repository.uploadPDF(normalizedInput, { signal: options.signal });
+    }
+    if (!this.idempotencyStore) {
+      throw new Error('Invoice PDF idempotency storage is unavailable');
+    }
+    if (idempotencyKey.length > 200 || !/^[\x21-\x7E]+$/.test(idempotencyKey)) {
+      throw new Error('Invalid Idempotency-Key');
+    }
+
+    const keyHash = hashIdempotencyKey(idempotencyKey);
+    try {
+      const execution = await this.idempotencyStore.execute(
+        idempotencyKey,
+        fingerprintInvoicePDFUpload(normalizedInput),
+        () => this.repository.uploadPDF(normalizedInput, { signal: options.signal }),
+        options.signal
+      );
+      this.onIdempotencyEvent?.({ event: execution.replayed ? 'replayed' : 'started', keyHash });
+      return execution.result;
+    } catch (error) {
+      if (error instanceof Error && error.name === 'IdempotencyKeyConflictError') {
+        this.onIdempotencyEvent?.({ event: 'conflict', keyHash });
+      }
+      throw error;
+    }
   }
 }

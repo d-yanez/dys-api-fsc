@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { InvoicePDFRepositorySellerCenter, SellerCenterInvoicePDFError } from '../infrastructure/sellercenter/invoicePdfRepositorySellerCenter';
+import {
+  InvoicePDFRepositorySellerCenter,
+  SellerCenterInvoicePDFError,
+  SellerCenterInvoicePDFTransientError,
+  SET_INVOICE_PDF_TIMEOUT_MS,
+} from '../infrastructure/sellercenter/invoicePdfRepositorySellerCenter';
 import * as sellerCenterClient from '../infrastructure/sellercenter/sellerCenterClient';
 
 const originalHttpPost = sellerCenterClient.httpPost;
@@ -95,5 +100,38 @@ test('InvoicePDFRepositorySellerCenter throws typed error on non-E004 error', as
       assert.equal(err.code, 'E999');
       return true;
     }
+  );
+});
+
+test('InvoicePDFRepositorySellerCenter applies the bounded SetInvoicePDF timeout', async () => {
+  let receivedOptions: { signal?: AbortSignal; timeoutMs?: number } | undefined;
+  (sellerCenterClient as unknown as { httpPost: typeof sellerCenterClient.httpPost }).httpPost = async (_url, _body, _headers, options) => {
+    receivedOptions = options;
+    const error = new Error('timed out');
+    error.name = 'SellerCenterRequestTimeoutError';
+    throw error;
+  };
+
+  const repo = new InvoicePDFRepositorySellerCenter();
+  await assert.rejects(
+    () => repo.uploadPDF(validInput),
+    (error: unknown) => error instanceof SellerCenterInvoicePDFTransientError && error.code === 'UPSTREAM_TIMEOUT'
+  );
+  assert.equal(receivedOptions?.timeoutMs, SET_INVOICE_PDF_TIMEOUT_MS);
+});
+
+test('InvoicePDFRepositorySellerCenter forwards request cancellation without exposing the payload', async () => {
+  const abort = new AbortController();
+  (sellerCenterClient as unknown as { httpPost: typeof sellerCenterClient.httpPost }).httpPost = async (_url, _body, _headers, options) => {
+    assert.equal(options?.signal, abort.signal);
+    const error = new Error('aborted');
+    error.name = 'AbortError';
+    throw error;
+  };
+
+  const repo = new InvoicePDFRepositorySellerCenter();
+  await assert.rejects(
+    () => repo.uploadPDF(validInput, { signal: abort.signal }),
+    (error: unknown) => error instanceof SellerCenterInvoicePDFTransientError && error.code === 'REQUEST_ABORTED'
   );
 });

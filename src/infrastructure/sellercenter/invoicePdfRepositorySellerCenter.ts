@@ -16,6 +16,15 @@ export class SellerCenterInvoicePDFError extends Error {
   }
 }
 
+export class SellerCenterInvoicePDFTransientError extends Error {
+  constructor(public readonly code: 'UPSTREAM_TIMEOUT' | 'REQUEST_ABORTED') {
+    super(code === 'UPSTREAM_TIMEOUT' ? 'Seller Center SetInvoicePDF timed out' : 'Seller Center SetInvoicePDF request was aborted');
+    this.name = 'SellerCenterInvoicePDFTransientError';
+  }
+}
+
+export const SET_INVOICE_PDF_TIMEOUT_MS = 4_000;
+
 function buildSignatureHeaders() {
   const headersToSign = {
     Action: 'SetInvoicePDF',
@@ -61,24 +70,32 @@ function extractJsonError(parsed: any): { code: string | null; message: string; 
 }
 
 export class InvoicePDFRepositorySellerCenter implements InvoicePDFRepository {
-  async uploadPDF(input: InvoicePDFUploadInput): Promise<InvoicePDFUploadResult> {
+  async uploadPDF(input: InvoicePDFUploadInput, options?: { signal?: AbortSignal }): Promise<InvoicePDFUploadResult> {
     const { headersToSign, signature } = buildSignatureHeaders();
 
     const endpoint = `${env.scEndpoint}/v1/marketplace-sellers/invoice/pdf`;
     const body = JSON.stringify(input);
 
-    const { status, body: responseBody } = await httpPost(endpoint, body, {
-      accept: 'application/json',
-      'content-type': 'application/json',
-      Action: headersToSign.Action,
-      Format: headersToSign.Format,
-      Service: headersToSign.Service,
-      Timestamp: headersToSign.Timestamp,
-      UserID: headersToSign.UserID,
-      Version: headersToSign.Version,
-      Signature: signature,
-      'User-Agent': env.scUserAgent || 'PostmanRuntime',
-    });
+    let response: Awaited<ReturnType<typeof httpPost>>;
+    try {
+      response = await httpPost(endpoint, body, {
+        accept: 'application/json',
+        'content-type': 'application/json',
+        Action: headersToSign.Action,
+        Format: headersToSign.Format,
+        Service: headersToSign.Service,
+        Timestamp: headersToSign.Timestamp,
+        UserID: headersToSign.UserID,
+        Version: headersToSign.Version,
+        Signature: signature,
+        'User-Agent': env.scUserAgent || 'PostmanRuntime',
+      }, { signal: options?.signal, timeoutMs: SET_INVOICE_PDF_TIMEOUT_MS });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') throw new SellerCenterInvoicePDFTransientError('REQUEST_ABORTED');
+      if (error instanceof Error && error.name === 'SellerCenterRequestTimeoutError') throw new SellerCenterInvoicePDFTransientError('UPSTREAM_TIMEOUT');
+      throw error;
+    }
+    const { status, body: responseBody } = response;
 
     if (status < 200 || status >= 300) {
       throw new SellerCenterInvoicePDFError(

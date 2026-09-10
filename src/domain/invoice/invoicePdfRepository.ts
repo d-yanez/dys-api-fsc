@@ -25,5 +25,5 @@ export interface InvoicePDFUploadErrorResult {
 }
 
 export interface InvoicePDFRepository {
-  uploadPDF(input: InvoicePDFUploadInput): Promise<InvoicePDFUploadResult>;
+  uploadPDF(input: InvoicePDFUploadInput, options?: { signal?: AbortSignal }): Promise<InvoicePDFUploadResult>;
 }

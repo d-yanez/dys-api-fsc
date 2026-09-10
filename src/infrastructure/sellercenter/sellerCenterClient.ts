@@ -104,7 +104,8 @@ export async function httpGet(url: string): Promise<{ status: number; body: stri
 export async function httpPost(
   url: string,
   body?: string,
-  extraHeaders?: Record<string, string>
+  extraHeaders?: Record<string, string>,
+  options?: { signal?: AbortSignal; timeoutMs?: number }
 ): Promise<{ status: number; body: string }> {
   logger.debug({ url }, '🌐 Calling Seller Center POST');
   return new Promise((resolve, reject) => {
@@ -126,13 +127,15 @@ export async function httpPost(
       }
     }
 
+    let timeout: NodeJS.Timeout | undefined;
     const req = https.request(
       {
         method: 'POST',
         protocol: u.protocol,
         hostname: u.hostname,
         path: u.pathname + u.search,
-        headers
+        headers,
+        signal: options?.signal,
       },
       (res) => {
         let data = '';
@@ -154,6 +157,18 @@ export async function httpPost(
       logger.error({ err }, '❌ Error in httpPost to Seller Center');
       reject(err);
     });
+
+    req.once('close', () => {
+      if (timeout) clearTimeout(timeout);
+    });
+
+    if (options?.timeoutMs && options.timeoutMs > 0) {
+      timeout = setTimeout(() => {
+        const error = new Error(`Seller Center request timed out after ${options.timeoutMs}ms`);
+        error.name = 'SellerCenterRequestTimeoutError';
+        req.destroy(error);
+      }, options.timeoutMs);
+    }
 
     if (requestBody.length > 0) {
       req.write(requestBody);
