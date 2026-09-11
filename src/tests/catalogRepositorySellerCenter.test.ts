@@ -186,6 +186,36 @@ test('template 2721 resolves and preserves the plush ProductCreate schema', () =
   assert.equal(product?.BusinessUnits?.BusinessUnit?.Stock, 2);
 });
 
+test('template 2179 resolves and preserves the plates ProductCreate schema', () => {
+  const template = __testables.resolveCategoryTemplate('2179');
+  assert.ok(template, '2179 must resolve to a registered category template');
+  assert.equal(template.templateId, 'cat-2179-v1');
+  const productNode = template.buildProductNode({
+    sellerSku: '4071303860', parentSku: '4071303860',
+    name: 'Pack 10 Platos Katseye Kpop Cumpleaños Carton 18cm Fans', primaryCategory: '2179',
+    description: 'Pack de 10 platos de cartón de 18 cm en tonos lila para celebraciones.', brand: 'GENERICO', taxClass: 'IVA 19%', variation: '...',
+    productData: { Model: 'Katseye', Material: 'Cartón', Dimensiones: '18 cm', MedidaVolumen: 18, UnidadDeMedida: 'cm', ConditionType: 'Nuevo', PackageWidth: 18, PackageLength: 5, PackageHeight: 25, PackageWeight: 0.2 },
+    businessUnits: { OperatorCode: 'facl', Price: 6990, SpecialPrice: 6710, Stock: 2, Status: 'active' },
+  } as any, '2179');
+  const product = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '' }).parse(__testables.buildXmlRequest({ Product: productNode }))?.Request?.Product;
+  assert.equal(String(product?.SellerSku), '4071303860');
+  assert.equal(String(product?.ParentSku), '4071303860');
+  assert.equal(String(product?.PrimaryCategory), '2179');
+  assert.equal(product?.Brand, 'GENERICO');
+  assert.equal(product?.TaxClass, 'IVA 19%');
+  assert.equal(Object.prototype.hasOwnProperty.call(product, 'ProductId'), false);
+  assert.equal(product?.ProductData?.Model, 'Katseye');
+  assert.equal(product?.ProductData?.Material, 'Cartón');
+  assert.equal(product?.ProductData?.MedidaVolumen, 18);
+  assert.equal(product?.ProductData?.UnidadDeMedida, 'cm');
+  assert.equal(product?.ProductData?.PackageWidth, 18);
+  assert.equal(product?.ProductData?.PackageLength, 5);
+  assert.equal(product?.ProductData?.PackageHeight, 25);
+  assert.equal(product?.ProductData?.PackageWeight, 0.2);
+  assert.equal(product?.BusinessUnits?.BusinessUnit?.Price, 6990);
+  assert.equal(product?.BusinessUnits?.BusinessUnit?.Stock, 2);
+});
+
 test('unknown categories fail closed before ProductCreate reaches Seller Center', async () => {
   assert.equal(__testables.resolveCategoryTemplate('999999'), undefined);
   const repository = new CatalogRepositorySellerCenter();

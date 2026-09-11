@@ -158,6 +158,10 @@ const CATEGORY_TEMPLATE_REGISTRY: Record<string, CategoryTemplate> = {
     templateId: 'cat-2721-v1',
     buildProductNode: buildDefaultCategoryProductNode,
   },
+  '2179': {
+    templateId: 'cat-2179-v1',
+    buildProductNode: buildDefaultCategoryProductNode,
+  },
   '3367': {
     templateId: 'cat-3367-v1',
     buildProductNode: buildDefaultCategoryProductNode,
