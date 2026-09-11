@@ -59,12 +59,13 @@ test('InvoiceV1Controller maps SellerCenterInvoicePDFError to 400', async () => 
   await controller.uploadInvoicePDF(req, res as any);
   assert.equal(res.statusCode, 400);
   assert.equal((res.body as any).code, 'E999');
+  assert.equal((res.body as any).upstreamStatus, 200);
 });
 
-test('InvoiceV1Controller maps upstream HTTP message to 502', async () => {
+test('InvoiceV1Controller maps typed upstream 5xx to a gateway failure', async () => {
   const controller = new InvoiceV1Controller({
     async execute() {
-      throw new Error('SellerCenter SetInvoicePDF HTTP 500');
+      throw new SellerCenterInvoicePDFError('Seller Center unavailable', 'E503', 'request-503', 503, 'gateway');
     },
   } as any);
   const req = { body: {}, method: 'POST', originalUrl: '/v1/invoices/pdf', headers: {} } as any;
@@ -72,6 +73,30 @@ test('InvoiceV1Controller maps upstream HTTP message to 502', async () => {
 
   await controller.uploadInvoicePDF(req, res as any);
   assert.equal(res.statusCode, 502);
+  assert.deepEqual(res.body, {
+    ok: false,
+    action: 'SetInvoicePDF',
+    code: 'E503',
+    message: 'Seller Center unavailable',
+    requestId: 'request-503',
+    upstreamStatus: 503,
+  });
+});
+
+test('InvoiceV1Controller keeps a structured upstream 404 as a permanent 4xx failure', async () => {
+  const controller = new InvoiceV1Controller({
+    async execute() {
+      throw new SellerCenterInvoicePDFError('Invoice order was not found', 'E404', 'request-404', 404);
+    },
+  } as any);
+  const req = { body: {}, method: 'POST', originalUrl: '/v1/invoices/pdf', headers: {} } as any;
+  const res = createMockResponse();
+
+  await controller.uploadInvoicePDF(req, res as any);
+  assert.equal(res.statusCode, 400);
+  assert.equal((res.body as any).code, 'E404');
+  assert.equal((res.body as any).requestId, 'request-404');
+  assert.equal((res.body as any).upstreamStatus, 404);
 });
 
 test('InvoiceV1Controller passes Idempotency-Key to the use case', async () => {
