@@ -4,6 +4,32 @@ import { env } from '../config/env';
 import { httpPost } from './sellerCenterClient';
 import { InvoicePDFRepository, InvoicePDFUploadInput, InvoicePDFUploadResult } from '../../domain/invoice/invoicePdfRepository';
 
+type RequestValueType = 'string' | 'array' | 'number' | 'boolean' | 'object' | 'null' | 'undefined';
+type StringSizeBucket = 'empty' | '1-16' | '17-64' | '65-256' | '257-1024' | '1025-16384' | '16385+' | 'not-applicable';
+type ArrayCountBucket = 'empty' | '1' | '2-5' | '6-20' | '21+' | 'not-applicable';
+type ArrayItemType = 'empty' | 'all-strings' | 'mixed' | 'not-applicable';
+
+interface ScalarRequestFieldShape {
+  type: RequestValueType;
+  sizeBucket: StringSizeBucket;
+}
+
+interface ArrayRequestFieldShape {
+  type: RequestValueType;
+  countBucket: ArrayCountBucket;
+  itemType: ArrayItemType;
+}
+
+export interface SellerCenterInvoicePDFRequestShape {
+  orderItemIds: ArrayRequestFieldShape;
+  invoiceNumber: ScalarRequestFieldShape;
+  invoiceDate: ScalarRequestFieldShape;
+  invoiceType: ScalarRequestFieldShape;
+  operatorCode: ScalarRequestFieldShape;
+  invoiceDocumentFormat: ScalarRequestFieldShape;
+  invoiceDocument: ScalarRequestFieldShape;
+}
+
 export class SellerCenterInvoicePDFError extends Error {
   constructor(
     message: string,
@@ -11,6 +37,7 @@ export class SellerCenterInvoicePDFError extends Error {
     public readonly requestId: string | null = null,
     public readonly upstreamStatus: number | null = null,
     public readonly failureKind: 'permanent' | 'gateway' = 'permanent',
+    public readonly requestShape: SellerCenterInvoicePDFRequestShape | null = null,
   ) {
     super(message);
     this.name = 'SellerCenterInvoicePDFError';
@@ -27,6 +54,62 @@ export class SellerCenterInvoicePDFTransientError extends Error {
 export const SET_INVOICE_PDF_TIMEOUT_MS = 4_000;
 const MAX_ERROR_RESPONSE_BYTES = 64 * 1024;
 const MAX_ERROR_MESSAGE_LENGTH = 500;
+
+function valueType(value: unknown): RequestValueType {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'array';
+  if (typeof value === 'string') return 'string';
+  if (typeof value === 'number') return 'number';
+  if (typeof value === 'boolean') return 'boolean';
+  if (typeof value === 'undefined') return 'undefined';
+  return 'object';
+}
+
+function stringSizeBucket(value: unknown): StringSizeBucket {
+  if (typeof value !== 'string') return 'not-applicable';
+  if (value.length === 0) return 'empty';
+  if (value.length <= 16) return '1-16';
+  if (value.length <= 64) return '17-64';
+  if (value.length <= 256) return '65-256';
+  if (value.length <= 1_024) return '257-1024';
+  if (value.length <= 16_384) return '1025-16384';
+  return '16385+';
+}
+
+function scalarFieldShape(value: unknown): ScalarRequestFieldShape {
+  return { type: valueType(value), sizeBucket: stringSizeBucket(value) };
+}
+
+function arrayCountBucket(value: unknown): ArrayCountBucket {
+  if (!Array.isArray(value)) return 'not-applicable';
+  if (value.length === 0) return 'empty';
+  if (value.length === 1) return '1';
+  if (value.length <= 5) return '2-5';
+  if (value.length <= 20) return '6-20';
+  return '21+';
+}
+
+function arrayItemType(value: unknown): ArrayItemType {
+  if (!Array.isArray(value)) return 'not-applicable';
+  if (value.length === 0) return 'empty';
+  return value.every((item) => typeof item === 'string') ? 'all-strings' : 'mixed';
+}
+
+export function describeInvoicePDFRequest(input: InvoicePDFUploadInput): SellerCenterInvoicePDFRequestShape {
+  return {
+    orderItemIds: {
+      type: valueType(input.orderItemIds),
+      countBucket: arrayCountBucket(input.orderItemIds),
+      itemType: arrayItemType(input.orderItemIds),
+    },
+    invoiceNumber: scalarFieldShape(input.invoiceNumber),
+    invoiceDate: scalarFieldShape(input.invoiceDate),
+    invoiceType: scalarFieldShape(input.invoiceType),
+    operatorCode: scalarFieldShape(input.operatorCode),
+    invoiceDocumentFormat: scalarFieldShape(input.invoiceDocumentFormat),
+    invoiceDocument: scalarFieldShape(input.invoiceDocument),
+  };
+}
 
 interface SafeSellerCenterError {
   code: string | null;
@@ -115,6 +198,7 @@ function parseBoundedErrorResponse(responseBody: string): SafeSellerCenterError 
 export class InvoicePDFRepositorySellerCenter implements InvoicePDFRepository {
   async uploadPDF(input: InvoicePDFUploadInput, options?: { signal?: AbortSignal }): Promise<InvoicePDFUploadResult> {
     const { headersToSign, signature } = buildSignatureHeaders();
+    const requestShape = () => describeInvoicePDFRequest(input);
 
     const endpoint = `${env.scEndpoint}/v1/marketplace-sellers/invoice/pdf`;
     const body = JSON.stringify(input);
@@ -148,6 +232,7 @@ export class InvoicePDFRepositorySellerCenter implements InvoicePDFRepository {
         error?.requestId ?? null,
         status,
         status >= 500 ? 'gateway' : 'permanent',
+        requestShape(),
       );
     }
 
@@ -159,7 +244,7 @@ export class InvoicePDFRepositorySellerCenter implements InvoicePDFRepository {
         { upstreamStatus: status, responseBytes: Buffer.byteLength(responseBody, 'utf8') },
         '❌ Failed to parse SetInvoicePDF JSON response'
       );
-      throw new SellerCenterInvoicePDFError('Failed to parse SetInvoicePDF response', null, null, status, 'gateway');
+      throw new SellerCenterInvoicePDFError('Failed to parse SetInvoicePDF response', null, null, status, 'gateway', requestShape());
     }
 
     if (parsed?.SuccessResponse?.Head?.ResponseType === 'Success' || parsed?.SuccessResponse) {
@@ -192,9 +277,11 @@ export class InvoicePDFRepositorySellerCenter implements InvoicePDFRepository {
         error?.code ?? null,
         error?.requestId ?? null,
         status,
+        'permanent',
+        requestShape(),
       );
     }
 
-    throw new SellerCenterInvoicePDFError('Unexpected SetInvoicePDF response shape', null, null, status, 'gateway');
+    throw new SellerCenterInvoicePDFError('Unexpected SetInvoicePDF response shape', null, null, status, 'gateway', requestShape());
   }
 }

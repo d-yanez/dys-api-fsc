@@ -50,6 +50,7 @@ export class InvoiceV1Controller {
             upstreamRequestId: sellerCenterError.requestId,
             upstreamStatus: sellerCenterError.upstreamStatus,
             failureKind: sellerCenterError.failureKind,
+            ...(sellerCenterError.requestShape && { requestShape: sellerCenterError.requestShape }),
           }),
         },
         '❌ Error in InvoiceV1Controller.uploadInvoicePDF'
