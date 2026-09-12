@@ -103,6 +103,130 @@ test('InvoicePDFRepositorySellerCenter throws typed error on non-E004 error', as
   );
 });
 
+test('InvoicePDFRepositorySellerCenter preserves safe fields from a structured 404 ErrorResponse', async () => {
+  (sellerCenterClient as unknown as { httpPost: typeof sellerCenterClient.httpPost }).httpPost = async () => ({
+    status: 404,
+    body: JSON.stringify({
+      ErrorResponse: {
+        Head: { RequestId: 'request-404' },
+        Body: { Errors: [{ Code: 'E404', Message: 'Invoice order was not found' }] },
+      },
+    }),
+  });
+
+  await assert.rejects(
+    () => new InvoicePDFRepositorySellerCenter().uploadPDF(validInput),
+    (error: unknown) => {
+      assert.ok(error instanceof SellerCenterInvoicePDFError);
+      assert.equal(error.code, 'E404');
+      assert.equal(error.message, 'Invoice order was not found');
+      assert.equal(error.requestId, 'request-404');
+      assert.equal(error.upstreamStatus, 404);
+      assert.equal(error.failureKind, 'permanent');
+      return true;
+    }
+  );
+});
+
+test('InvoicePDFRepositorySellerCenter uses a safe fallback for invalid and oversized error bodies', async () => {
+  const bodies = [
+    '{"ErrorResponse":{"Body":{"Errors":[{"Message":"JVBERi0xLjQ=',
+    JSON.stringify({
+      ErrorResponse: {
+        Body: {
+          Errors: [{ Message: validInput.invoiceDocument.repeat(20_000) }],
+        },
+      },
+    }),
+  ];
+
+  for (const body of bodies) {
+    (sellerCenterClient as unknown as { httpPost: typeof sellerCenterClient.httpPost }).httpPost = async () => ({
+      status: 400,
+      body,
+    });
+
+    await assert.rejects(
+      () => new InvoicePDFRepositorySellerCenter().uploadPDF(validInput),
+      (error: unknown) => {
+        assert.ok(error instanceof SellerCenterInvoicePDFError);
+        assert.equal(error.message, 'Seller Center SetInvoicePDF returned HTTP 400');
+        assert.equal(error.message.includes(validInput.invoiceDocument), false);
+        assert.equal(error.code, null);
+        assert.equal(error.requestId, null);
+        assert.equal(error.upstreamStatus, 400);
+        return true;
+      }
+    );
+  }
+});
+
+test('InvoicePDFRepositorySellerCenter classifies upstream 5xx as a gateway failure', async () => {
+  (sellerCenterClient as unknown as { httpPost: typeof sellerCenterClient.httpPost }).httpPost = async () => ({
+    status: 503,
+    body: JSON.stringify({
+      ErrorResponse: {
+        Head: { RequestId: 'request-503' },
+        Body: { Errors: [{ Code: 'E503', Message: 'Seller Center unavailable' }] },
+      },
+    }),
+  });
+
+  await assert.rejects(
+    () => new InvoicePDFRepositorySellerCenter().uploadPDF(validInput),
+    (error: unknown) => {
+      assert.ok(error instanceof SellerCenterInvoicePDFError);
+      assert.equal(error.failureKind, 'gateway');
+      assert.equal(error.upstreamStatus, 503);
+      assert.equal(error.code, 'E503');
+      assert.equal(error.requestId, 'request-503');
+      return true;
+    }
+  );
+});
+
+test('InvoicePDFRepositorySellerCenter classifies an invalid 2xx protocol body as a gateway failure without leaking it', async () => {
+  const rawBody = `not-json-${validInput.invoiceDocument}`;
+  (sellerCenterClient as unknown as { httpPost: typeof sellerCenterClient.httpPost }).httpPost = async () => ({
+    status: 200,
+    body: rawBody,
+  });
+
+  await assert.rejects(
+    () => new InvoicePDFRepositorySellerCenter().uploadPDF(validInput),
+    (error: unknown) => {
+      assert.ok(error instanceof SellerCenterInvoicePDFError);
+      assert.equal(error.failureKind, 'gateway');
+      assert.equal(error.upstreamStatus, 200);
+      assert.equal(error.message, 'Failed to parse SetInvoicePDF response');
+      assert.equal(error.message.includes(rawBody), false);
+      return true;
+    }
+  );
+});
+
+test('InvoicePDFRepositorySellerCenter redacts payload-like content from an upstream message', async () => {
+  const leakedDocument = 'A'.repeat(80);
+  (sellerCenterClient as unknown as { httpPost: typeof sellerCenterClient.httpPost }).httpPost = async () => ({
+    status: 422,
+    body: JSON.stringify({
+      ErrorResponse: {
+        Body: { Errors: [{ Code: 'E422', Message: `Rejected invoiceDocument ${leakedDocument}` }] },
+      },
+    }),
+  });
+
+  await assert.rejects(
+    () => new InvoicePDFRepositorySellerCenter().uploadPDF(validInput),
+    (error: unknown) => {
+      assert.ok(error instanceof SellerCenterInvoicePDFError);
+      assert.equal(error.message, 'Rejected invoiceDocument [redacted]');
+      assert.equal(error.message.includes(leakedDocument), false);
+      return true;
+    }
+  );
+});
+
 test('InvoicePDFRepositorySellerCenter applies the bounded SetInvoicePDF timeout', async () => {
   let receivedOptions: { signal?: AbortSignal; timeoutMs?: number } | undefined;
   (sellerCenterClient as unknown as { httpPost: typeof sellerCenterClient.httpPost }).httpPost = async (_url, _body, _headers, options) => {

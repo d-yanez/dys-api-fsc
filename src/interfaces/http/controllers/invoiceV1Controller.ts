@@ -100,23 +100,13 @@ export class InvoiceV1Controller {
       }
 
       if (err instanceof SellerCenterInvoicePDFError) {
-        return res.status(400).json({
+        return res.status(err.failureKind === 'gateway' ? 502 : 400).json({
           ok: false,
           action: 'SetInvoicePDF',
           code: err.code,
           message: err.message,
           requestId: err.requestId,
           upstreamStatus: err.upstreamStatus,
-        });
-      }
-
-      if (message.startsWith('SellerCenter SetInvoicePDF HTTP')) {
-        return res.status(502).json({
-          ok: false,
-          action: 'SetInvoicePDF',
-          code: null,
-          message: 'Error consultando Falabella Seller Center SetInvoicePDF',
-          requestId: null,
         });
       }
 

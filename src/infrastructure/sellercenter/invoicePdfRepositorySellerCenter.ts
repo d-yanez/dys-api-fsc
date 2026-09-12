@@ -10,6 +10,7 @@ export class SellerCenterInvoicePDFError extends Error {
     public readonly code: string | null = null,
     public readonly requestId: string | null = null,
     public readonly upstreamStatus: number | null = null,
+    public readonly failureKind: 'permanent' | 'gateway' = 'permanent',
   ) {
     super(message);
     this.name = 'SellerCenterInvoicePDFError';
@@ -24,6 +25,14 @@ export class SellerCenterInvoicePDFTransientError extends Error {
 }
 
 export const SET_INVOICE_PDF_TIMEOUT_MS = 4_000;
+const MAX_ERROR_RESPONSE_BYTES = 64 * 1024;
+const MAX_ERROR_MESSAGE_LENGTH = 500;
+
+interface SafeSellerCenterError {
+  code: string | null;
+  message: string | null;
+  requestId: string | null;
+}
 
 function buildSignatureHeaders() {
   const headersToSign = {
@@ -51,22 +60,56 @@ function buildSignatureHeaders() {
   };
 }
 
-function extractJsonError(parsed: any): { code: string | null; message: string; requestId: string | null } {
-  const requestId = parsed?.ErrorResponse?.Head?.RequestId != null
-    ? String(parsed.ErrorResponse.Head.RequestId)
-    : null;
+function sanitizeIdentifier(value: unknown, maxLength: number): string | null {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const normalized = String(value).trim();
+  if (!normalized || normalized.length > maxLength || !/^[A-Za-z0-9._:-]+$/.test(normalized)) return null;
+  return normalized;
+}
 
-  const firstError = parsed?.ErrorResponse?.Body?.Errors?.[0]
-    ?? parsed?.ErrorResponse?.Body?.Errors?.Error?.[0]
-    ?? parsed?.ErrorResponse?.Body?.Errors?.Error
-    ?? null;
+function sanitizeErrorMessage(value: unknown): string | null {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const normalized = String(value)
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .replace(/"invoiceDocument"\s*:\s*"[^"]*"/gi, '"invoiceDocument":"[redacted]"')
+    .replace(/(?:data:application\/pdf;base64,)?[A-Za-z0-9+/]{64,}={0,2}/gi, '[redacted]')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!normalized || normalized.length > MAX_ERROR_MESSAGE_LENGTH) return null;
+  return normalized;
+}
 
-  const code = firstError?.Code != null ? String(firstError.Code) : null;
-  const message = firstError?.Message != null
-    ? String(firstError.Message)
-    : 'Seller Center SetInvoicePDF returned ErrorResponse';
+function extractJsonError(parsed: unknown): SafeSellerCenterError | null {
+  const response = (parsed as {
+    ErrorResponse?: {
+      Head?: { RequestId?: unknown; ErrorCode?: unknown; ErrorMessage?: unknown };
+      Body?: { Errors?: unknown };
+    };
+  })?.ErrorResponse;
+  if (!response) return null;
+
+  const requestId = sanitizeIdentifier(response.Head?.RequestId, 128);
+
+  const errors = response.Body?.Errors;
+  const firstError = Array.isArray(errors)
+    ? errors[0]
+    : (errors as { Error?: unknown } | null)?.Error;
+  const normalizedError = Array.isArray(firstError) ? firstError[0] : firstError;
+  const fields = normalizedError as { Code?: unknown; Message?: unknown } | null;
+
+  const code = sanitizeIdentifier(fields?.Code ?? response.Head?.ErrorCode, 64);
+  const message = sanitizeErrorMessage(fields?.Message ?? response.Head?.ErrorMessage);
 
   return { code, message, requestId };
+}
+
+function parseBoundedErrorResponse(responseBody: string): SafeSellerCenterError | null {
+  if (Buffer.byteLength(responseBody, 'utf8') > MAX_ERROR_RESPONSE_BYTES) return null;
+  try {
+    return extractJsonError(JSON.parse(responseBody) as unknown);
+  } catch {
+    return null;
+  }
 }
 
 export class InvoicePDFRepositorySellerCenter implements InvoicePDFRepository {
@@ -98,20 +141,25 @@ export class InvoicePDFRepositorySellerCenter implements InvoicePDFRepository {
     const { status, body: responseBody } = response;
 
     if (status < 200 || status >= 300) {
+      const error = parseBoundedErrorResponse(responseBody);
       throw new SellerCenterInvoicePDFError(
-        `SellerCenter SetInvoicePDF HTTP ${status}`,
-        null,
-        null,
+        error?.message ?? `Seller Center SetInvoicePDF returned HTTP ${status}`,
+        error?.code ?? null,
+        error?.requestId ?? null,
         status,
+        status >= 500 ? 'gateway' : 'permanent',
       );
     }
 
     let parsed: any;
     try {
       parsed = JSON.parse(responseBody);
-    } catch (err) {
-      logger.error({ err, bodySnippet: responseBody.slice(0, 500) }, '❌ Failed to parse SetInvoicePDF JSON response');
-      throw new SellerCenterInvoicePDFError('Failed to parse SetInvoicePDF response', null, null, status);
+    } catch {
+      logger.error(
+        { upstreamStatus: status, responseBytes: Buffer.byteLength(responseBody, 'utf8') },
+        '❌ Failed to parse SetInvoicePDF JSON response'
+      );
+      throw new SellerCenterInvoicePDFError('Failed to parse SetInvoicePDF response', null, null, status, 'gateway');
     }
 
     if (parsed?.SuccessResponse?.Head?.ResponseType === 'Success' || parsed?.SuccessResponse) {
@@ -129,19 +177,24 @@ export class InvoicePDFRepositorySellerCenter implements InvoicePDFRepository {
 
     if (parsed?.ErrorResponse) {
       const error = extractJsonError(parsed);
-      if (error.code === 'E004') {
+      if (error?.code === 'E004') {
         return {
           ok: true,
           action: 'SetInvoicePDF',
           requestId: error.requestId,
           alreadyExists: true,
-          message: error.message || 'Invoice already exists',
+          message: error.message ?? 'Invoice already exists',
         };
       }
 
-      throw new SellerCenterInvoicePDFError(error.message, error.code, error.requestId, status);
+      throw new SellerCenterInvoicePDFError(
+        error?.message ?? 'Seller Center SetInvoicePDF returned ErrorResponse',
+        error?.code ?? null,
+        error?.requestId ?? null,
+        status,
+      );
     }
 
-    throw new SellerCenterInvoicePDFError('Unexpected SetInvoicePDF response shape', null, null, status);
+    throw new SellerCenterInvoicePDFError('Unexpected SetInvoicePDF response shape', null, null, status, 'gateway');
   }
 }
