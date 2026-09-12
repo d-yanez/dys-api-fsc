@@ -35,27 +35,25 @@ export class InvoiceV1Controller {
       return res.status(200).json(result);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
+      const sellerCenterError = err instanceof SellerCenterInvoicePDFError ? err : null;
 
       logger.error(
         {
           err: message,
+          errorType: err instanceof Error ? err.name : typeof err,
           endpoint: '/v1/invoices/pdf',
           method: req.method,
           url: req.originalUrl,
           requestId: req.headers['x-request-id'],
+          ...(sellerCenterError && {
+            sellerCenterCode: sellerCenterError.code,
+            upstreamRequestId: sellerCenterError.requestId,
+            upstreamStatus: sellerCenterError.upstreamStatus,
+            failureKind: sellerCenterError.failureKind,
+          }),
         },
         '❌ Error in InvoiceV1Controller.uploadInvoicePDF'
       );
-
-      if (message.startsWith('Invalid ')) {
-        return res.status(400).json({
-          ok: false,
-          action: 'SetInvoicePDF',
-          code: 'VALIDATION_ERROR',
-          message,
-          requestId: null,
-        });
-      }
 
       if (err instanceof IdempotencyKeyConflictError) {
         return res.status(409).json({
@@ -107,6 +105,16 @@ export class InvoiceV1Controller {
           message: err.message,
           requestId: err.requestId,
           upstreamStatus: err.upstreamStatus,
+        });
+      }
+
+      if (message.startsWith('Invalid ')) {
+        return res.status(400).json({
+          ok: false,
+          action: 'SetInvoicePDF',
+          code: 'VALIDATION_ERROR',
+          message,
+          requestId: null,
         });
       }
 
