@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  describeInvoicePDFRequest,
   InvoicePDFRepositorySellerCenter,
   SellerCenterInvoicePDFError,
   SellerCenterInvoicePDFTransientError,
@@ -23,6 +24,55 @@ const validInput = {
   invoiceDocumentFormat: 'pdf' as const,
   invoiceDocument: 'JVBERi0xLjQ=',
 };
+
+test('describeInvoicePDFRequest emits only fixed fields, finite labels, and size buckets', () => {
+  const sensitiveValues = [
+    'order-item-sensitive-42',
+    'invoice-number-sensitive-42',
+    '2026-09-12-sensitive',
+    'operator-sensitive-42',
+    'pdf-base64-sensitive-42',
+    'authorization-sensitive-42',
+    'https://private.example/sensitive',
+    'arbitrary-sensitive-42',
+  ];
+  const input = {
+    ...validInput,
+    orderItemIds: [sensitiveValues[0]],
+    invoiceNumber: sensitiveValues[1],
+    invoiceDate: sensitiveValues[2],
+    operatorCode: sensitiveValues[3],
+    invoiceDocument: sensitiveValues[4],
+    authorization: sensitiveValues[5],
+    endpoint: sensitiveValues[6],
+    arbitraryField: sensitiveValues[7],
+  } as typeof validInput;
+
+  const shape = describeInvoicePDFRequest(input);
+
+  assert.deepEqual(Object.keys(shape), [
+    'orderItemIds',
+    'invoiceNumber',
+    'invoiceDate',
+    'invoiceType',
+    'operatorCode',
+    'invoiceDocumentFormat',
+    'invoiceDocument',
+  ]);
+  assert.deepEqual(shape, {
+    orderItemIds: { type: 'array', countBucket: '1', itemType: 'all-strings' },
+    invoiceNumber: { type: 'string', sizeBucket: '17-64' },
+    invoiceDate: { type: 'string', sizeBucket: '17-64' },
+    invoiceType: { type: 'string', sizeBucket: '1-16' },
+    operatorCode: { type: 'string', sizeBucket: '17-64' },
+    invoiceDocumentFormat: { type: 'string', sizeBucket: '1-16' },
+    invoiceDocument: { type: 'string', sizeBucket: '17-64' },
+  });
+  const serializedShape = JSON.stringify(shape);
+  for (const sensitiveValue of sensitiveValues) {
+    assert.equal(serializedShape.includes(sensitiveValue), false);
+  }
+});
 
 test('InvoicePDFRepositorySellerCenter maps SuccessResponse JSON', async () => {
   (sellerCenterClient as unknown as { httpPost: typeof sellerCenterClient.httpPost }).httpPost = async () => ({
@@ -109,7 +159,7 @@ test('InvoicePDFRepositorySellerCenter preserves safe fields from a structured 4
     body: JSON.stringify({
       ErrorResponse: {
         Head: { RequestId: 'request-404' },
-        Body: { Errors: [{ Code: 'E404', Message: 'Invoice order was not found' }] },
+        Body: { Errors: [{ Code: 'E004', Message: 'Invalid Request Format' }] },
       },
     }),
   });
@@ -118,11 +168,24 @@ test('InvoicePDFRepositorySellerCenter preserves safe fields from a structured 4
     () => new InvoicePDFRepositorySellerCenter().uploadPDF(validInput),
     (error: unknown) => {
       assert.ok(error instanceof SellerCenterInvoicePDFError);
-      assert.equal(error.code, 'E404');
-      assert.equal(error.message, 'Invoice order was not found');
+      assert.equal(error.code, 'E004');
+      assert.equal(error.message, 'Invalid Request Format');
       assert.equal(error.requestId, 'request-404');
       assert.equal(error.upstreamStatus, 404);
       assert.equal(error.failureKind, 'permanent');
+      assert.deepEqual(error.requestShape, {
+        orderItemIds: { type: 'array', countBucket: '1', itemType: 'all-strings' },
+        invoiceNumber: { type: 'string', sizeBucket: '1-16' },
+        invoiceDate: { type: 'string', sizeBucket: '1-16' },
+        invoiceType: { type: 'string', sizeBucket: '1-16' },
+        operatorCode: { type: 'string', sizeBucket: '1-16' },
+        invoiceDocumentFormat: { type: 'string', sizeBucket: '1-16' },
+        invoiceDocument: { type: 'string', sizeBucket: '1-16' },
+      });
+      const serializedShape = JSON.stringify(error.requestShape);
+      for (const sensitiveValue of Object.values(validInput).flat()) {
+        assert.equal(serializedShape.includes(String(sensitiveValue)), false);
+      }
       return true;
     }
   );

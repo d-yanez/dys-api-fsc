@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { InvoiceV1Controller } from '../interfaces/http/controllers/invoiceV1Controller';
 import { SellerCenterInvoicePDFError, SellerCenterInvoicePDFTransientError } from '../infrastructure/sellercenter/invoicePdfRepositorySellerCenter';
 import { IdempotencyCompletionTimeoutError, IdempotencyOperationInProgressError } from '../application/services/invoicePDFIdempotency';
+import { logger } from '../infrastructure/logger/logger';
 
 interface MockResponse {
   statusCode: number;
@@ -107,19 +108,40 @@ test('InvoiceV1Controller maps typed upstream 5xx to a gateway failure', async (
 });
 
 test('InvoiceV1Controller keeps a structured upstream 404 as a permanent 4xx failure', async () => {
+  const requestShape = {
+    orderItemIds: { type: 'array', countBucket: '1', itemType: 'all-strings' },
+    invoiceNumber: { type: 'string', sizeBucket: '1-16' },
+    invoiceDate: { type: 'string', sizeBucket: '1-16' },
+    invoiceType: { type: 'string', sizeBucket: '1-16' },
+    operatorCode: { type: 'string', sizeBucket: '1-16' },
+    invoiceDocumentFormat: { type: 'string', sizeBucket: '1-16' },
+    invoiceDocument: { type: 'string', sizeBucket: '16385+' },
+  } as const;
+  let loggedContext: Record<string, unknown> | null = null;
+  const originalLoggerError = logger.error;
+  logger.error = ((context: Record<string, unknown>) => {
+    loggedContext = context;
+  }) as typeof logger.error;
   const controller = new InvoiceV1Controller({
     async execute() {
-      throw new SellerCenterInvoicePDFError('Invoice order was not found', 'E404', 'request-404', 404);
+      throw new SellerCenterInvoicePDFError('Invoice order was not found', 'E404', 'request-404', 404, 'permanent', requestShape);
     },
   } as any);
   const req = { body: {}, method: 'POST', originalUrl: '/v1/invoices/pdf', headers: {} } as any;
   const res = createMockResponse();
 
-  await controller.uploadInvoicePDF(req, res as any);
+  try {
+    await controller.uploadInvoicePDF(req, res as any);
+  } finally {
+    logger.error = originalLoggerError;
+  }
   assert.equal(res.statusCode, 400);
   assert.equal((res.body as any).code, 'E404');
   assert.equal((res.body as any).requestId, 'request-404');
   assert.equal((res.body as any).upstreamStatus, 404);
+  assert.ok(loggedContext);
+  assert.deepEqual((loggedContext as Record<string, unknown>).requestShape, requestShape);
+  assert.equal('requestShape' in (res.body as Record<string, unknown>), false);
 });
 
 test('InvoiceV1Controller passes Idempotency-Key to the use case', async () => {
