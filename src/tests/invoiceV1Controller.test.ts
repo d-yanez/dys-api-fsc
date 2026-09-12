@@ -62,6 +62,29 @@ test('InvoiceV1Controller maps SellerCenterInvoicePDFError to 400', async () => 
   assert.equal((res.body as any).upstreamStatus, 200);
 });
 
+test('InvoiceV1Controller preserves a typed Seller Center error whose message starts with Invalid', async () => {
+  const controller = new InvoiceV1Controller({
+    async execute() {
+      throw new SellerCenterInvoicePDFError('Invalid Request Format', 'E004', 'seller-request-id', 200);
+    },
+  } as any);
+  const req = { body: {}, method: 'POST', originalUrl: '/v1/invoices/pdf', headers: {} } as any;
+  const res = createMockResponse();
+
+  await controller.uploadInvoicePDF(req, res as any);
+
+  assert.equal(res.statusCode, 400);
+  assert.deepEqual(res.body, {
+    ok: false,
+    action: 'SetInvoicePDF',
+    code: 'E004',
+    message: 'Invalid Request Format',
+    requestId: 'seller-request-id',
+    upstreamStatus: 200,
+  });
+  assert.notEqual((res.body as any).code, 'VALIDATION_ERROR');
+});
+
 test('InvoiceV1Controller maps typed upstream 5xx to a gateway failure', async () => {
   const controller = new InvoiceV1Controller({
     async execute() {
