@@ -2,17 +2,24 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   describeInvoicePDFRequest,
+  IntervalSuccessTelemetrySampler,
   InvoicePDFRepositorySellerCenter,
   SellerCenterInvoicePDFError,
   SellerCenterInvoicePDFTransientError,
+  SET_INVOICE_PDF_SUCCESS_SAMPLE_INTERVAL_MS,
   SET_INVOICE_PDF_TIMEOUT_MS,
 } from '../infrastructure/sellercenter/invoicePdfRepositorySellerCenter';
 import * as sellerCenterClient from '../infrastructure/sellercenter/sellerCenterClient';
+import { logger } from '../infrastructure/logger/logger';
+import { InvoicePDFUploadInput } from '../domain/invoice/invoicePdfRepository';
 
 const originalHttpPost = sellerCenterClient.httpPost;
+const originalLoggerInfo = logger.info;
+const fixedChileNow = new Date('2026-09-12T15:00:00.000Z');
 
 test.afterEach(() => {
   (sellerCenterClient as unknown as { httpPost: typeof sellerCenterClient.httpPost }).httpPost = originalHttpPost;
+  logger.info = originalLoggerInfo;
 });
 
 const validInput = {
@@ -48,7 +55,7 @@ test('describeInvoicePDFRequest emits only fixed fields, finite labels, and size
     arbitraryField: sensitiveValues[7],
   } as typeof validInput;
 
-  const shape = describeInvoicePDFRequest(input);
+  const shape = describeInvoicePDFRequest(input, fixedChileNow);
 
   assert.deepEqual(Object.keys(shape), [
     'orderItemIds',
@@ -58,6 +65,7 @@ test('describeInvoicePDFRequest emits only fixed fields, finite labels, and size
     'operatorCode',
     'invoiceDocumentFormat',
     'invoiceDocument',
+    'semanticChecks',
   ]);
   assert.deepEqual(shape, {
     orderItemIds: { type: 'array', countBucket: '1', itemType: 'all-strings' },
@@ -67,10 +75,77 @@ test('describeInvoicePDFRequest emits only fixed fields, finite labels, and size
     operatorCode: { type: 'string', sizeBucket: '17-64' },
     invoiceDocumentFormat: { type: 'string', sizeBucket: '1-16' },
     invoiceDocument: { type: 'string', sizeBucket: '17-64' },
+    semanticChecks: {
+      itemIdsNumeric: false,
+      itemIdsUnique: true,
+      invoiceDateNotFuture: false,
+      documentBase64Valid: false,
+      documentHasPdfMagic: false,
+    },
   });
   const serializedShape = JSON.stringify(shape);
   for (const sensitiveValue of sensitiveValues) {
     assert.equal(serializedShape.includes(sensitiveValue), false);
+  }
+});
+
+test('describeInvoicePDFRequest reports numeric and unique item ID semantics without exposing IDs', () => {
+  assert.deepEqual(describeInvoicePDFRequest(validInput, fixedChileNow).semanticChecks, {
+    itemIdsNumeric: true,
+    itemIdsUnique: true,
+    invoiceDateNotFuture: true,
+    documentBase64Valid: true,
+    documentHasPdfMagic: true,
+  });
+
+  assert.deepEqual(
+    describeInvoicePDFRequest({ ...validInput, orderItemIds: ['123', '123'] }, fixedChileNow).semanticChecks,
+    {
+      itemIdsNumeric: true,
+      itemIdsUnique: false,
+      invoiceDateNotFuture: true,
+      documentBase64Valid: true,
+      documentHasPdfMagic: true,
+    }
+  );
+  assert.equal(
+    describeInvoicePDFRequest({ ...validInput, orderItemIds: ['123', 'not-numeric'] }, fixedChileNow).semanticChecks.itemIdsNumeric,
+    false
+  );
+});
+
+test('describeInvoicePDFRequest compares valid invoice calendar dates in America/Santiago', () => {
+  const beforeUtcMidnightInSantiago = new Date('2026-09-13T02:30:00.000Z');
+
+  assert.equal(
+    describeInvoicePDFRequest({ ...validInput, invoiceDate: '2026-09-12' }, beforeUtcMidnightInSantiago).semanticChecks.invoiceDateNotFuture,
+    true
+  );
+  assert.equal(
+    describeInvoicePDFRequest({ ...validInput, invoiceDate: '2026-09-13' }, beforeUtcMidnightInSantiago).semanticChecks.invoiceDateNotFuture,
+    false
+  );
+  assert.equal(
+    describeInvoicePDFRequest({ ...validInput, invoiceDate: '2026-02-30' }, fixedChileNow).semanticChecks.invoiceDateNotFuture,
+    false
+  );
+});
+
+test('describeInvoicePDFRequest distinguishes canonical Base64 and PDF magic without logging content', () => {
+  const cases = [
+    { document: 'JVBERi0xLjQ=', base64Valid: true, hasPdfMagic: true },
+    { document: 'aGVsbG8=', base64Valid: true, hasPdfMagic: false },
+    { document: '', base64Valid: false, hasPdfMagic: false },
+    { document: 'Zh==', base64Valid: false, hasPdfMagic: false },
+    { document: 'aGVsbG8_', base64Valid: false, hasPdfMagic: false },
+    { document: 'JVBERi0xLjQ', base64Valid: false, hasPdfMagic: false },
+  ];
+
+  for (const entry of cases) {
+    const shape = describeInvoicePDFRequest({ ...validInput, invoiceDocument: entry.document }, fixedChileNow);
+    assert.equal(shape.semanticChecks.documentBase64Valid, entry.base64Valid);
+    assert.equal(shape.semanticChecks.documentHasPdfMagic, entry.hasPdfMagic);
+    if (entry.document) assert.equal(JSON.stringify(shape).includes(entry.document), false);
   }
 });
 
@@ -97,7 +172,68 @@ test('InvoicePDFRepositorySellerCenter maps SuccessResponse JSON', async () => {
   assert.equal(result.requestId, '123456789');
 });
 
+test('InvoicePDFRepositorySellerCenter rate-limits privacy-safe success samples per process sampler', async () => {
+  const sensitiveInput: InvoicePDFUploadInput = {
+    orderItemIds: ['991827364551'],
+    invoiceNumber: '7726354918',
+    invoiceDate: '2026-09-11',
+    invoiceType: 'FACTURA' as const,
+    operatorCode: 'operator-private-sentinel',
+    invoiceDocumentFormat: 'pdf',
+    invoiceDocument: Buffer.from('%PDF-private-document-sentinel', 'ascii').toString('base64'),
+  };
+  const loggedContexts: Record<string, unknown>[] = [];
+  logger.info = ((context: Record<string, unknown>) => {
+    loggedContexts.push(context);
+  }) as typeof logger.info;
+  (sellerCenterClient as unknown as { httpPost: typeof sellerCenterClient.httpPost }).httpPost = async () => ({
+    status: 200,
+    body: JSON.stringify({
+      SuccessResponse: {
+        Head: { RequestId: 'sensitive-upstream-request-id', ResponseType: 'Success' },
+        Body: {},
+      },
+    }),
+  });
+
+  let nowMs = fixedChileNow.getTime();
+  const repo = new InvoicePDFRepositorySellerCenter(
+    () => new Date(nowMs),
+    new IntervalSuccessTelemetrySampler()
+  );
+
+  await repo.uploadPDF(sensitiveInput);
+  nowMs += SET_INVOICE_PDF_SUCCESS_SAMPLE_INTERVAL_MS - 1;
+  await repo.uploadPDF(sensitiveInput);
+  nowMs += 1;
+  await repo.uploadPDF(sensitiveInput);
+
+  assert.equal(loggedContexts.length, 2);
+  for (const context of loggedContexts) {
+    assert.deepEqual(Object.keys(context), ['event', 'outcome', 'requestShape']);
+    assert.equal(context.event, 'set_invoice_pdf_request_shape_sample');
+    assert.equal(context.outcome, 'success');
+    const serializedContext = JSON.stringify(context);
+    assert.equal(serializedContext.includes('sensitive-upstream-request-id'), false);
+    const sensitiveValues = [
+      ...sensitiveInput.orderItemIds,
+      sensitiveInput.invoiceNumber,
+      sensitiveInput.invoiceDate,
+      sensitiveInput.invoiceType,
+      sensitiveInput.operatorCode,
+      sensitiveInput.invoiceDocument,
+    ];
+    for (const sensitiveValue of sensitiveValues) {
+      assert.equal(serializedContext.includes(String(sensitiveValue)), false);
+    }
+  }
+});
+
 test('InvoicePDFRepositorySellerCenter maps E004 as alreadyExists success', async () => {
+  let successSamples = 0;
+  logger.info = (() => {
+    successSamples += 1;
+  }) as typeof logger.info;
   (sellerCenterClient as unknown as { httpPost: typeof sellerCenterClient.httpPost }).httpPost = async () => ({
     status: 200,
     body: JSON.stringify({
@@ -122,6 +258,7 @@ test('InvoicePDFRepositorySellerCenter maps E004 as alreadyExists success', asyn
   assert.equal(result.ok, true);
   assert.equal(result.alreadyExists, true);
   assert.equal(result.message, 'Invoice already exists');
+  assert.equal(successSamples, 0);
 });
 
 test('InvoicePDFRepositorySellerCenter throws typed error on non-E004 error', async () => {
@@ -181,6 +318,13 @@ test('InvoicePDFRepositorySellerCenter preserves safe fields from a structured 4
         operatorCode: { type: 'string', sizeBucket: '1-16' },
         invoiceDocumentFormat: { type: 'string', sizeBucket: '1-16' },
         invoiceDocument: { type: 'string', sizeBucket: '1-16' },
+        semanticChecks: {
+          itemIdsNumeric: true,
+          itemIdsUnique: true,
+          invoiceDateNotFuture: true,
+          documentBase64Valid: true,
+          documentHasPdfMagic: true,
+        },
       });
       const serializedShape = JSON.stringify(error.requestShape);
       for (const sensitiveValue of Object.values(validInput).flat()) {
