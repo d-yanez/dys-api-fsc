@@ -6,12 +6,17 @@ import { logger } from '../../../infrastructure/logger/logger';
 import { DurableInvoicePDFIdempotencyStore } from '../../../application/services/invoicePDFIdempotency';
 import { createMongoInvoicePDFIdempotencyPersistence } from '../../../infrastructure/mongodb/invoicePDFIdempotencyPersistence';
 import { env } from '../../../infrastructure/config/env';
+import { OrderItemRepositorySellerCenter } from '../../../infrastructure/sellercenter/orderItemRepositorySellerCenter';
 
 export function createInvoiceV1Router(executor?: UploadInvoicePDFUseCase): Router {
   const router = Router();
   const useCase =
     executor ??
-    new UploadInvoicePDFUseCase(new InvoicePDFRepositorySellerCenter(), new DurableInvoicePDFIdempotencyStore(createMongoInvoicePDFIdempotencyPersistence({
+    new UploadInvoicePDFUseCase(new InvoicePDFRepositorySellerCenter(
+      undefined,
+      undefined,
+      new OrderItemRepositorySellerCenter()
+    ), new DurableInvoicePDFIdempotencyStore(createMongoInvoicePDFIdempotencyPersistence({
       uri: env.mongodbUri,
       dbName: env.mongodbDbName,
     })), (event) => {
