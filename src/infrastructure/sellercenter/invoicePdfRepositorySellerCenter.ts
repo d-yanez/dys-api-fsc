@@ -75,13 +75,14 @@ const chileDateFormatter = new Intl.DateTimeFormat('en-US', {
 });
 
 export class IntervalSuccessTelemetrySampler {
-  private lastSampleAt: number | null = null;
+  private readonly lastSampleAtByItemCountBucket = new Map<ArrayCountBucket, number>();
 
   constructor(private readonly intervalMs = SET_INVOICE_PDF_SUCCESS_SAMPLE_INTERVAL_MS) {}
 
-  shouldSample(nowMs: number): boolean {
-    if (this.lastSampleAt !== null && nowMs - this.lastSampleAt < this.intervalMs) return false;
-    this.lastSampleAt = nowMs;
+  shouldSample(itemCountBucket: ArrayCountBucket, nowMs: number): boolean {
+    const lastSampleAt = this.lastSampleAtByItemCountBucket.get(itemCountBucket);
+    if (lastSampleAt !== undefined && nowMs - lastSampleAt < this.intervalMs) return false;
+    this.lastSampleAtByItemCountBucket.set(itemCountBucket, nowMs);
     return true;
   }
 }
@@ -343,12 +344,13 @@ export class InvoicePDFRepositorySellerCenter implements InvoicePDFRepository {
         ? String(parsed.SuccessResponse.Head.RequestId)
         : null;
       const now = this.now();
-      if (this.successTelemetrySampler.shouldSample(now.getTime())) {
+      const successfulRequestShape = describeInvoicePDFRequest(input, now);
+      if (this.successTelemetrySampler.shouldSample(successfulRequestShape.orderItemIds.countBucket, now.getTime())) {
         logger.info(
           {
             event: 'set_invoice_pdf_request_shape_sample',
             outcome: 'success',
-            requestShape: describeInvoicePDFRequest(input, now),
+            requestShape: successfulRequestShape,
           },
           'SetInvoicePDF successful request telemetry sample'
         );
