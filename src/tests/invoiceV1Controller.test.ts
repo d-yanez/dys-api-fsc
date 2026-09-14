@@ -151,6 +151,72 @@ test('InvoiceV1Controller keeps a structured upstream 404 as a permanent 4xx fai
   assert.equal('requestShape' in (res.body as Record<string, unknown>), false);
 });
 
+test('InvoiceV1Controller returns and logs only the safe E004 diagnostic envelope', async () => {
+  const diagnostic = {
+    code: 'REQUESTED_ITEMS_MISSING' as const,
+    requestedItemCount: 2,
+    matchedItemCount: 1,
+    missingItemCount: 1,
+    statuses: ['shipped'],
+    shippingTypes: ['dropshipping'],
+    processability: { processable: 1, notProcessable: 0, unknown: 0 },
+    packageCount: 1,
+  };
+  let loggedContext: Record<string, unknown> | null = null;
+  const originalLoggerError = logger.error;
+  logger.error = ((context: Record<string, unknown>) => {
+    loggedContext = context;
+  }) as typeof logger.error;
+  const controller = new InvoiceV1Controller({
+    async execute() {
+      throw new SellerCenterInvoicePDFError(
+        'Invalid Request Format',
+        'E004',
+        'seller-request-id',
+        404,
+        'permanent',
+        null,
+        diagnostic
+      );
+    },
+  });
+  const sensitiveInput = {
+    sellerOrderId: 'sensitive-order-id',
+    orderItemIds: ['sensitive-item-id'],
+    invoiceDocument: 'sensitive-document-base64',
+  };
+  const req = {
+    body: sensitiveInput,
+    method: 'POST',
+    originalUrl: '/v1/invoices/pdf',
+    headers: {},
+  } as any;
+  const res = createMockResponse();
+
+  try {
+    await controller.uploadInvoicePDF(req, res as any);
+  } finally {
+    logger.error = originalLoggerError;
+  }
+
+  assert.equal(res.statusCode, 400);
+  assert.deepEqual(res.body, {
+    ok: false,
+    action: 'SetInvoicePDF',
+    code: 'E004',
+    message: 'Invalid Request Format',
+    requestId: 'seller-request-id',
+    upstreamStatus: 404,
+    diagnostic,
+  });
+  assert.ok(loggedContext);
+  assert.deepEqual((loggedContext as Record<string, unknown>).diagnostic, diagnostic);
+  const serialized = JSON.stringify({ response: res.body, log: loggedContext });
+  for (const sensitiveValue of Object.values(sensitiveInput).flat()) {
+    assert.equal(serialized.includes(String(sensitiveValue)), false);
+  }
+});
+
 test('InvoiceV1Controller passes Idempotency-Key to the use case', async () => {
   let receivedOptions: unknown;
   const controller = new InvoiceV1Controller({

@@ -72,12 +72,14 @@ test('UploadInvoicePDFUseCase normalizes and delegates', async () => {
   const uc = new UploadInvoicePDFUseCase(repo);
   const res = await uc.execute({
     ...validInput,
+    sellerOrderId: ' 1164806328 ',
     orderItemIds: [' 164027299 '],
     invoiceType: 'boleta' as any,
   });
   assert.equal(res.ok, true);
   assert.equal(repo.lastInput.invoiceType, 'BOLETA');
   assert.deepEqual(repo.lastInput.orderItemIds, ['164027299']);
+  assert.equal(repo.lastInput.sellerOrderId, '1164806328');
 });
 
 test('UploadInvoicePDFUseCase validates required fields', async () => {
@@ -89,6 +91,21 @@ test('UploadInvoicePDFUseCase validates required fields', async () => {
   await assert.rejects(() => uc.execute({ ...validInput, operatorCode: '' as any }), /Invalid operatorCode/);
   await assert.rejects(() => uc.execute({ ...validInput, invoiceDocumentFormat: 'xml' as any }), /Invalid invoiceDocumentFormat/);
   await assert.rejects(() => uc.execute({ ...validInput, invoiceDocument: '' as any }), /Invalid invoiceDocument/);
+  await assert.rejects(() => uc.execute({ ...validInput, sellerOrderId: 'not-numeric' }), /Invalid sellerOrderId/);
+});
+
+test('UploadInvoicePDFUseCase keeps sellerOrderId optional and outside upload idempotency identity', async () => {
+  const repo = new FakeRepo();
+  const uc = new UploadInvoicePDFUseCase(repo, createIdempotencyStore());
+
+  const first = await uc.execute(validInput, { idempotencyKey: 'diagnostic-metadata' });
+  const replay = await uc.execute(
+    { ...validInput, sellerOrderId: '1164806328' },
+    { idempotencyKey: 'diagnostic-metadata' }
+  );
+
+  assert.deepEqual(replay, first);
+  assert.equal(repo.calls, 1);
 });
 
 test('UploadInvoicePDFUseCase replays an equivalent idempotent request without another upload', async () => {
