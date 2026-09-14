@@ -172,7 +172,7 @@ test('InvoicePDFRepositorySellerCenter maps SuccessResponse JSON', async () => {
   assert.equal(result.requestId, '123456789');
 });
 
-test('InvoicePDFRepositorySellerCenter rate-limits privacy-safe success samples per process sampler', async () => {
+test('InvoicePDFRepositorySellerCenter samples successes independently per finite item-count bucket', async () => {
   const sensitiveInput: InvoicePDFUploadInput = {
     orderItemIds: ['991827364551'],
     invoiceNumber: '7726354918',
@@ -205,10 +205,17 @@ test('InvoicePDFRepositorySellerCenter rate-limits privacy-safe success samples 
   await repo.uploadPDF(sensitiveInput);
   nowMs += SET_INVOICE_PDF_SUCCESS_SAMPLE_INTERVAL_MS - 1;
   await repo.uploadPDF(sensitiveInput);
+  await repo.uploadPDF({ ...sensitiveInput, orderItemIds: ['100', '200'] });
   nowMs += 1;
   await repo.uploadPDF(sensitiveInput);
 
-  assert.equal(loggedContexts.length, 2);
+  assert.equal(loggedContexts.length, 3);
+  assert.deepEqual(
+    loggedContexts.map((context) => (
+      context.requestShape as { orderItemIds: { countBucket: string } }
+    ).orderItemIds.countBucket),
+    ['1', '2-5', '1']
+  );
   for (const context of loggedContexts) {
     assert.deepEqual(Object.keys(context), ['event', 'outcome', 'requestShape']);
     assert.equal(context.event, 'set_invoice_pdf_request_shape_sample');
@@ -226,7 +233,48 @@ test('InvoicePDFRepositorySellerCenter rate-limits privacy-safe success samples 
     for (const sensitiveValue of sensitiveValues) {
       assert.equal(serializedContext.includes(String(sensitiveValue)), false);
     }
+    assert.equal(serializedContext.includes('100'), false);
+    assert.equal(serializedContext.includes('200'), false);
   }
+});
+
+test('InvoicePDFRepositorySellerCenter skips full request analysis for a rate-limited success', async () => {
+  let successSamples = 0;
+  logger.info = (() => {
+    successSamples += 1;
+  }) as typeof logger.info;
+  (sellerCenterClient as unknown as { httpPost: typeof sellerCenterClient.httpPost }).httpPost = async () => ({
+    status: 200,
+    body: JSON.stringify({
+      SuccessResponse: {
+        Head: { RequestId: 'request-id', ResponseType: 'Success' },
+        Body: {},
+      },
+    }),
+  });
+
+  const repo = new InvoicePDFRepositorySellerCenter(
+    () => fixedChileNow,
+    new IntervalSuccessTelemetrySampler()
+  );
+  await repo.uploadPDF(validInput);
+
+  let documentReads = 0;
+  const rateLimitedInput = { ...validInput } as InvoicePDFUploadInput;
+  Object.defineProperty(rateLimitedInput, 'invoiceDocument', {
+    enumerable: true,
+    get() {
+      documentReads += 1;
+      if (documentReads > 1) throw new Error('unexpected full request analysis');
+      return validInput.invoiceDocument;
+    },
+  });
+
+  const result = await repo.uploadPDF(rateLimitedInput);
+
+  assert.equal(result.ok, true);
+  assert.equal(documentReads, 1);
+  assert.equal(successSamples, 1);
 });
 
 test('InvoicePDFRepositorySellerCenter maps E004 as alreadyExists success', async () => {
