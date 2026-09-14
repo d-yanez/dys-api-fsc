@@ -116,6 +116,13 @@ test('InvoiceV1Controller keeps a structured upstream 404 as a permanent 4xx fai
     operatorCode: { type: 'string', sizeBucket: '1-16' },
     invoiceDocumentFormat: { type: 'string', sizeBucket: '1-16' },
     invoiceDocument: { type: 'string', sizeBucket: '16385+' },
+    semanticChecks: {
+      itemIdsNumeric: true,
+      itemIdsUnique: true,
+      invoiceDateNotFuture: true,
+      documentBase64Valid: true,
+      documentHasPdfMagic: true,
+    },
   } as const;
   let loggedContext: Record<string, unknown> | null = null;
   const originalLoggerError = logger.error;

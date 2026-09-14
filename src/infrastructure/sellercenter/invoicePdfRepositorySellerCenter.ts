@@ -28,6 +28,13 @@ export interface SellerCenterInvoicePDFRequestShape {
   operatorCode: ScalarRequestFieldShape;
   invoiceDocumentFormat: ScalarRequestFieldShape;
   invoiceDocument: ScalarRequestFieldShape;
+  semanticChecks: {
+    itemIdsNumeric: boolean;
+    itemIdsUnique: boolean;
+    invoiceDateNotFuture: boolean;
+    documentBase64Valid: boolean;
+    documentHasPdfMagic: boolean;
+  };
 }
 
 export class SellerCenterInvoicePDFError extends Error {
@@ -52,8 +59,34 @@ export class SellerCenterInvoicePDFTransientError extends Error {
 }
 
 export const SET_INVOICE_PDF_TIMEOUT_MS = 4_000;
+export const SET_INVOICE_PDF_SUCCESS_SAMPLE_INTERVAL_MS = 15 * 60 * 1_000;
 const MAX_ERROR_RESPONSE_BYTES = 64 * 1024;
 const MAX_ERROR_MESSAGE_LENGTH = 500;
+const CHILE_TIME_ZONE = 'America/Santiago';
+const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+const CANONICAL_BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+const PDF_MAGIC = Buffer.from('%PDF-', 'ascii');
+const chileDateFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: CHILE_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+export class IntervalSuccessTelemetrySampler {
+  private lastSampleAt: number | null = null;
+
+  constructor(private readonly intervalMs = SET_INVOICE_PDF_SUCCESS_SAMPLE_INTERVAL_MS) {}
+
+  shouldSample(nowMs: number): boolean {
+    if (this.lastSampleAt !== null && nowMs - this.lastSampleAt < this.intervalMs) return false;
+    this.lastSampleAt = nowMs;
+    return true;
+  }
+}
+
+const processSuccessTelemetrySampler = new IntervalSuccessTelemetrySampler();
 
 function valueType(value: unknown): RequestValueType {
   if (value === null) return 'null';
@@ -95,7 +128,53 @@ function arrayItemType(value: unknown): ArrayItemType {
   return value.every((item) => typeof item === 'string') ? 'all-strings' : 'mixed';
 }
 
-export function describeInvoicePDFRequest(input: InvoicePDFUploadInput): SellerCenterInvoicePDFRequestShape {
+function currentChileDate(now: Date): string {
+  const parts = chileDateFormatter.formatToParts(now);
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+  return year && month && day ? `${year}-${month}-${day}` : '';
+}
+
+function isValidCalendarDate(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  const match = ISO_DATE_PATTERN.exec(value);
+  if (!match) return false;
+  const [, yearText, monthText, dayText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const candidate = new Date(0);
+  candidate.setUTCHours(0, 0, 0, 0);
+  candidate.setUTCFullYear(year, month - 1, day);
+  return candidate.getUTCFullYear() === year
+    && candidate.getUTCMonth() === month - 1
+    && candidate.getUTCDate() === day;
+}
+
+function isCanonicalStandardBase64(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length === 0 || value.length % 4 !== 0) return false;
+  if (!CANONICAL_BASE64_PATTERN.test(value)) return false;
+
+  const lastQuartet = value.slice(-4);
+  if (lastQuartet.endsWith('==')) {
+    return BASE64_ALPHABET.indexOf(lastQuartet[1]) % 16 === 0;
+  }
+  if (lastQuartet.endsWith('=')) {
+    return BASE64_ALPHABET.indexOf(lastQuartet[2]) % 4 === 0;
+  }
+  return true;
+}
+
+function hasPdfMagic(value: string): boolean {
+  if (value.length < 8) return false;
+  const prefix = Buffer.from(value.slice(0, 8), 'base64');
+  return prefix.length >= PDF_MAGIC.length && prefix.subarray(0, PDF_MAGIC.length).equals(PDF_MAGIC);
+}
+
+export function describeInvoicePDFRequest(input: InvoicePDFUploadInput, now = new Date()): SellerCenterInvoicePDFRequestShape {
+  const itemIds = Array.isArray(input.orderItemIds) ? input.orderItemIds : [];
+  const documentBase64Valid = isCanonicalStandardBase64(input.invoiceDocument);
   return {
     orderItemIds: {
       type: valueType(input.orderItemIds),
@@ -108,6 +187,13 @@ export function describeInvoicePDFRequest(input: InvoicePDFUploadInput): SellerC
     operatorCode: scalarFieldShape(input.operatorCode),
     invoiceDocumentFormat: scalarFieldShape(input.invoiceDocumentFormat),
     invoiceDocument: scalarFieldShape(input.invoiceDocument),
+    semanticChecks: {
+      itemIdsNumeric: itemIds.length > 0 && itemIds.every((item) => typeof item === 'string' && /^\d+$/.test(item)),
+      itemIdsUnique: itemIds.length > 0 && new Set(itemIds).size === itemIds.length,
+      invoiceDateNotFuture: isValidCalendarDate(input.invoiceDate) && input.invoiceDate <= currentChileDate(now),
+      documentBase64Valid,
+      documentHasPdfMagic: documentBase64Valid && hasPdfMagic(input.invoiceDocument),
+    },
   };
 }
 
@@ -196,9 +282,14 @@ function parseBoundedErrorResponse(responseBody: string): SafeSellerCenterError 
 }
 
 export class InvoicePDFRepositorySellerCenter implements InvoicePDFRepository {
+  constructor(
+    private readonly now: () => Date = () => new Date(),
+    private readonly successTelemetrySampler: IntervalSuccessTelemetrySampler = processSuccessTelemetrySampler,
+  ) {}
+
   async uploadPDF(input: InvoicePDFUploadInput, options?: { signal?: AbortSignal }): Promise<InvoicePDFUploadResult> {
     const { headersToSign, signature } = buildSignatureHeaders();
-    const requestShape = () => describeInvoicePDFRequest(input);
+    const requestShape = () => describeInvoicePDFRequest(input, this.now());
 
     const endpoint = `${env.scEndpoint}/v1/marketplace-sellers/invoice/pdf`;
     const body = JSON.stringify(input);
@@ -251,6 +342,17 @@ export class InvoicePDFRepositorySellerCenter implements InvoicePDFRepository {
       const requestId = parsed?.SuccessResponse?.Head?.RequestId != null
         ? String(parsed.SuccessResponse.Head.RequestId)
         : null;
+      const now = this.now();
+      if (this.successTelemetrySampler.shouldSample(now.getTime())) {
+        logger.info(
+          {
+            event: 'set_invoice_pdf_request_shape_sample',
+            outcome: 'success',
+            requestShape: describeInvoicePDFRequest(input, now),
+          },
+          'SetInvoicePDF successful request telemetry sample'
+        );
+      }
       return {
         ok: true,
         action: 'SetInvoicePDF',
