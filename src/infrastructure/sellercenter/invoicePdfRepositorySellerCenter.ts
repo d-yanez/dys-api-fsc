@@ -344,13 +344,13 @@ export class InvoicePDFRepositorySellerCenter implements InvoicePDFRepository {
         ? String(parsed.SuccessResponse.Head.RequestId)
         : null;
       const now = this.now();
-      const successfulRequestShape = describeInvoicePDFRequest(input, now);
-      if (this.successTelemetrySampler.shouldSample(successfulRequestShape.orderItemIds.countBucket, now.getTime())) {
+      const itemCountBucket = arrayCountBucket(input.orderItemIds);
+      if (this.successTelemetrySampler.shouldSample(itemCountBucket, now.getTime())) {
         logger.info(
           {
             event: 'set_invoice_pdf_request_shape_sample',
             outcome: 'success',
-            requestShape: successfulRequestShape,
+            requestShape: describeInvoicePDFRequest(input, now),
           },
           'SetInvoicePDF successful request telemetry sample'
         );
