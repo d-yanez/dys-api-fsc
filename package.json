@@ -3,14 +3,17 @@
   "version": "1.0.0",
   "main": "dist/interfaces/http/server.js",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only src/interfaces/http/server.ts",
+    "dev": "tsx watch src/interfaces/http/server.ts",
     "build": "rimraf dist && tsc",
     "start": "node dist/interfaces/http/server.js",
     "test": "npm run build && node --test dist/tests",
     "deps:policy": "node -e \"const p=require('./package.json');const bad=[];for(const s of ['dependencies','devDependencies','optionalDependencies']){for(const [n,v] of Object.entries(p[s]||{})){if(v==='latest'||v==='*')bad.push(s+':'+n+'@'+v)}} if(bad.length){console.error('Blocked dependency specs\\n'+bad.join('\\n'));process.exit(1)} console.log('deps policy ok')\"",
     "deps:install:ci": "npm ci --ignore-scripts",
-    "deps:policy:lockfile": "node -e \"const fs=require('fs');const f=fs.existsSync('pnpm-lock.yaml')?'pnpm-lock.yaml':(fs.existsSync('package-lock.json')?'package-lock.json':null); if(!f){console.log('no lockfile found');process.exit(0)} const t=fs.readFileSync(f,'utf8'); const hosts=new Set(); if(f==='package-lock.json'){ for(const m of t.matchAll(/\\\"(?:resolved|tarball)\\\"\\s*:\\s*\\\"https?:\\\\/\\\\/([^\\\\/\\\"\\\\s]+)/g)){ hosts.add(m[1]); } } else { for(const m of t.matchAll(/(?:resolved|tarball):\\s*https?:\\/\\/([^\\/\\s]+)/g)){ hosts.add(m[1]); } } const bad=[...hosts].filter(h=>h!=='registry.npmjs.org'); if(bad.length){console.error('Disallowed lockfile hosts:\\n'+bad.join('\\n'));process.exit(1)} console.log('lockfile host policy ok')\""
+    "deps:policy:lockfile": "node -e \"const fs=require('fs');const files=['pnpm-lock.yaml','package-lock.json'].filter(f=>fs.existsSync(f));if(!files.length){console.log('no lockfile found');process.exit(0)}const bad=[];for(const f of files){const t=fs.readFileSync(f,'utf8');const hosts=new Set();if(f==='package-lock.json'){for(const m of t.matchAll(/\\\"(?:resolved|tarball)\\\"\\s*:\\s*\\\"https?:\\\\/\\\\/([^\\\\/\\\"\\\\s]+)/g)){hosts.add(m[1])}}else{for(const m of t.matchAll(/(?:resolved|tarball):\\s*https?:\\/\\/([^\\/\\s]+)/g)){hosts.add(m[1])}}for(const h of hosts){if(h!=='registry.npmjs.org')bad.push(f+':'+h)}}if(bad.length){console.error('Disallowed lockfile hosts:\\n'+bad.join('\\n'));process.exit(1)}console.log('lockfile host policy ok')\""
   },
   "dependencies": {
     "dotenv": "^16.4.5",
@@ -25,16 +28,26 @@
     "@types/node": "^20.16.0",
     "pino-pretty": "^13.1.2",
     "rimraf": "^5.0.7",
-    "ts-node-dev": "^2.0.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.5.4"
+  },
+  "overrides": {
+    "brace-expansion": "5.0.11",
+    "glob": "10.5.0",
+    "minimatch": "9.0.7",
+    "path-to-regexp": "0.1.13",
+    "picomatch": "2.3.2",
+    "proxy-addr": "2.0.8"
   },
   "packageManager": "pnpm@10.24.0",
   "pnpm": {
     "overrides": {
+      "brace-expansion": "5.0.11",
       "glob": "10.5.0",
       "minimatch": "9.0.7",
       "path-to-regexp": "0.1.13",
-      "picomatch": "2.3.2"
+      "picomatch": "2.3.2",
+      "proxy-addr": "2.0.8"
     }
   }
 }

@@ -2,7 +2,15 @@ import crypto from 'crypto';
 import { logger } from '../logger/logger';
 import { env } from '../config/env';
 import { httpPost } from './sellerCenterClient';
-import { InvoicePDFRepository, InvoicePDFUploadInput, InvoicePDFUploadResult } from '../../domain/invoice/invoicePdfRepository';
+import {
+  InvoicePDFE004Diagnostic,
+  InvoicePDFE004DiagnosticCode,
+  InvoicePDFRepository,
+  InvoicePDFUploadInput,
+  InvoicePDFUploadResult,
+} from '../../domain/invoice/invoicePdfRepository';
+import { OrderItemRepository } from '../../domain/orders/orderItemRepository';
+import { OrderItem } from '../../domain/orders/orderItem';
 
 type RequestValueType = 'string' | 'array' | 'number' | 'boolean' | 'object' | 'null' | 'undefined';
 type StringSizeBucket = 'empty' | '1-16' | '17-64' | '65-256' | '257-1024' | '1025-16384' | '16385+' | 'not-applicable';
@@ -45,6 +53,7 @@ export class SellerCenterInvoicePDFError extends Error {
     public readonly upstreamStatus: number | null = null,
     public readonly failureKind: 'permanent' | 'gateway' = 'permanent',
     public readonly requestShape: SellerCenterInvoicePDFRequestShape | null = null,
+    public readonly diagnostic: InvoicePDFE004Diagnostic | null = null,
   ) {
     super(message);
     this.name = 'SellerCenterInvoicePDFError';
@@ -59,6 +68,7 @@ export class SellerCenterInvoicePDFTransientError extends Error {
 }
 
 export const SET_INVOICE_PDF_TIMEOUT_MS = 4_000;
+export const GET_ORDER_ITEMS_DIAGNOSTIC_TIMEOUT_MS = 1_500;
 export const SET_INVOICE_PDF_SUCCESS_SAMPLE_INTERVAL_MS = 15 * 60 * 1_000;
 const MAX_ERROR_RESPONSE_BYTES = 64 * 1024;
 const MAX_ERROR_MESSAGE_LENGTH = 500;
@@ -282,18 +292,145 @@ function parseBoundedErrorResponse(responseBody: string): SafeSellerCenterError 
   }
 }
 
+const ELIGIBLE_INVOICE_STATUSES = new Set(['ready_to_ship', 'shipped', 'delivered']);
+const FINITE_STATUSES = new Set([
+  'pending',
+  'ready_to_ship',
+  'shipped',
+  'delivered',
+  'canceled',
+  'cancelled',
+  'returned',
+  'failed',
+]);
+const FINITE_SHIPPING_TYPES = new Set([
+  'dropshipping',
+  'fulfillment',
+  'own_warehouse',
+  'cross_docking',
+]);
+
+function normalizedLabel(value: string | null | undefined): string {
+  return String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+}
+
+function safeStatus(value: string | null | undefined): string {
+  const normalized = normalizedLabel(value);
+  return FINITE_STATUSES.has(normalized) ? normalized : 'unknown';
+}
+
+function safeShippingType(value: string | null | undefined): string {
+  const normalized = normalizedLabel(value);
+  if (normalized === 'fbs') return 'dropshipping';
+  if (normalized === 'fbf' || normalized === 'ownwarehouse') return 'fulfillment';
+  return FINITE_SHIPPING_TYPES.has(normalized) ? normalized : 'unknown';
+}
+
+function diagnosticCode(params: {
+  missingItemCount: number;
+  statuses: string[];
+  shippingTypes: string[];
+  notProcessable: number;
+  packageCount: number;
+}): InvoicePDFE004DiagnosticCode {
+  if (params.missingItemCount > 0) return 'REQUESTED_ITEMS_MISSING';
+  if (params.notProcessable > 0) return 'ITEMS_NOT_PROCESSABLE';
+  if (params.shippingTypes.some((value) => value === 'fulfillment' || value === 'own_warehouse')) {
+    return 'OWN_WAREHOUSE_ITEMS';
+  }
+  if (params.statuses.some((value) => !ELIGIBLE_INVOICE_STATUSES.has(value))) return 'ITEM_STATUS_INELIGIBLE';
+  if (params.packageCount > 1) return 'MULTIPLE_PACKAGES';
+  return 'NO_MISMATCH_DETECTED';
+}
+
+export function describeE004OrderItems(
+  requestedOrderItemIds: string[],
+  currentItems: OrderItem[]
+): InvoicePDFE004Diagnostic {
+  const currentById = new Map(currentItems.map((item) => [item.orderItemId, item]));
+  const matchedItems = requestedOrderItemIds
+    .map((orderItemId) => currentById.get(orderItemId))
+    .filter((item): item is OrderItem => item !== undefined);
+  const missingItemCount = requestedOrderItemIds.length - matchedItems.length;
+  const statuses = [...new Set(matchedItems.map((item) => safeStatus(item.status)))].sort();
+  const shippingTypes = [...new Set(matchedItems.map((item) => safeShippingType(item.shippingType)))].sort();
+  const processability = {
+    processable: matchedItems.filter((item) => item.isProcessable === true).length,
+    notProcessable: matchedItems.filter((item) => item.isProcessable === false).length,
+    unknown: matchedItems.filter((item) => item.isProcessable == null).length,
+  };
+  const packageCount = new Set(
+    matchedItems.map((item) => item.packageId?.trim()).filter((value): value is string => Boolean(value))
+  ).size;
+
+  return {
+    code: diagnosticCode({
+      missingItemCount,
+      statuses,
+      shippingTypes,
+      notProcessable: processability.notProcessable,
+      packageCount,
+    }),
+    requestedItemCount: requestedOrderItemIds.length,
+    matchedItemCount: matchedItems.length,
+    missingItemCount,
+    statuses,
+    shippingTypes,
+    processability,
+    packageCount,
+  };
+}
+
+function unavailableE004Diagnostic(requestedItemCount: number): InvoicePDFE004Diagnostic {
+  return {
+    code: 'DIAGNOSTIC_UNAVAILABLE',
+    requestedItemCount,
+    matchedItemCount: null,
+    missingItemCount: null,
+    statuses: [],
+    shippingTypes: [],
+    processability: null,
+    packageCount: null,
+  };
+}
+
 export class InvoicePDFRepositorySellerCenter implements InvoicePDFRepository {
   constructor(
     private readonly now: () => Date = () => new Date(),
     private readonly successTelemetrySampler: IntervalSuccessTelemetrySampler = processSuccessTelemetrySampler,
+    private readonly orderItemRepository?: Pick<OrderItemRepository, 'getOrderItemsByOrderId'>,
   ) {}
+
+  private async diagnoseE004(
+    input: InvoicePDFUploadInput,
+    signal?: AbortSignal
+  ): Promise<InvoicePDFE004Diagnostic | null> {
+    if (!input.sellerOrderId || !this.orderItemRepository) return null;
+    try {
+      const items = await this.orderItemRepository.getOrderItemsByOrderId(input.sellerOrderId, {
+        signal,
+        timeoutMs: GET_ORDER_ITEMS_DIAGNOSTIC_TIMEOUT_MS,
+      });
+      return describeE004OrderItems(input.orderItemIds, items);
+    } catch {
+      return unavailableE004Diagnostic(input.orderItemIds.length);
+    }
+  }
 
   async uploadPDF(input: InvoicePDFUploadInput, options?: { signal?: AbortSignal }): Promise<InvoicePDFUploadResult> {
     const { headersToSign, signature } = buildSignatureHeaders();
     const requestShape = () => describeInvoicePDFRequest(input, this.now());
 
     const endpoint = `${env.scEndpoint}/v1/marketplace-sellers/invoice/pdf`;
-    const body = JSON.stringify(input);
+    const body = JSON.stringify({
+      orderItemIds: input.orderItemIds,
+      invoiceNumber: input.invoiceNumber,
+      invoiceDate: input.invoiceDate,
+      invoiceType: input.invoiceType,
+      operatorCode: input.operatorCode,
+      invoiceDocumentFormat: input.invoiceDocumentFormat,
+      invoiceDocument: input.invoiceDocument,
+    });
 
     let response: Awaited<ReturnType<typeof httpPost>>;
     try {
@@ -318,6 +455,9 @@ export class InvoicePDFRepositorySellerCenter implements InvoicePDFRepository {
 
     if (status < 200 || status >= 300) {
       const error = parseBoundedErrorResponse(responseBody);
+      const diagnostic = error?.code === 'E004'
+        ? await this.diagnoseE004(input, options?.signal)
+        : null;
       throw new SellerCenterInvoicePDFError(
         error?.message ?? `Seller Center SetInvoicePDF returned HTTP ${status}`,
         error?.code ?? null,
@@ -325,6 +465,7 @@ export class InvoicePDFRepositorySellerCenter implements InvoicePDFRepository {
         status,
         status >= 500 ? 'gateway' : 'permanent',
         requestShape(),
+        diagnostic,
       );
     }
 

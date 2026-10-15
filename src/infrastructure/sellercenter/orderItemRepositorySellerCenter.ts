@@ -16,17 +16,20 @@ export class OrderItemRepositorySellerCenter implements OrderItemRepository {
     });
   }
 
-  async getOrderItemsByOrderId(orderId: string): Promise<OrderItem[]> {
+  async getOrderItemsByOrderId(
+    orderId: string,
+    options?: { signal?: AbortSignal; timeoutMs?: number }
+  ): Promise<OrderItem[]> {
     const { url } = buildSignedUrl({
       Action: 'GetOrderItems',
       Version: '1.0',
       OrderId: orderId,
     });
 
-    const { status, body } = await httpGet(url);
+    const { status, body } = await httpGet(url, options);
 
     if (status !== 200) {
-      logger.error({ status, bodySnippet: body.slice(0, 300) }, '❌ Non-200 response from Seller Center GetOrderItems');
+      logger.error({ status }, '❌ Non-200 response from Seller Center GetOrderItems');
       throw new Error(`SellerCenter GetOrderItems HTTP ${status}`);
     }
 
@@ -44,7 +47,7 @@ export class OrderItemRepositorySellerCenter implements OrderItemRepository {
 
       // Fallback inverso por si el formato declarado no coincide con la respuesta real
       if (!itemsNode) {
-        logger.warn({ format, bodySnippet: body.slice(0, 200) }, '⚠️ OrderItems not found with primary parser, trying fallback');
+        logger.warn({ format }, '⚠️ OrderItems not found with primary parser, trying fallback');
 
         if (format === 'JSON') {
           const parsedXml = this.xmlParser.parse(body) as any;
@@ -56,14 +59,14 @@ export class OrderItemRepositorySellerCenter implements OrderItemRepository {
       }
     } catch (err: any) {
       logger.error(
-        { err: err?.message ?? err, bodySnippet: body.slice(0, 500) },
+        { errorType: err instanceof Error ? err.name : typeof err },
         '❌ Failed to parse Seller Center GetOrderItems response (JSON/XML)'
       );
       throw new Error('Failed to parse Seller Center GetOrderItems response (JSON/XML).');
     }
 
     if (!itemsNode) {
-      logger.error({ bodySnippet: body.slice(0, 500) }, '❌ No OrderItems data in Seller Center response');
+      logger.error({}, '❌ No OrderItems data in Seller Center response');
       throw new Error('OrderItems not found in Seller Center response');
     }
 
@@ -94,8 +97,15 @@ export class OrderItemRepositorySellerCenter implements OrderItemRepository {
       const quantityRaw = it.Quantity ?? it.ItemQuantity;
       const quantity = quantityRaw != null ? Number(quantityRaw) : 1;
 
-      const isProcessable =
-        it.IsProcessable != null ? String(it.IsProcessable) === '1' : null;
+      const processableRaw = it.IsProcessable;
+      const processableText = processableRaw == null ? '' : String(processableRaw).trim().toLowerCase();
+      const isProcessable = processableRaw == null
+        ? null
+        : (processableRaw === true || processableText === '1' || processableText === 'true')
+          ? true
+          : (processableRaw === false || processableText === '0' || processableText === 'false')
+            ? false
+            : null;
 
       // Algunos campos de monto típicos en GetOrderItems: ItemPrice, PaidPrice, ShippingAmount :contentReference[oaicite:1]{index=1}
       const price = it.ItemPrice != null ? Number(it.ItemPrice) : null;

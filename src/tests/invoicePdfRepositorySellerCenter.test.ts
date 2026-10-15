@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  describeE004OrderItems,
   describeInvoicePDFRequest,
+  GET_ORDER_ITEMS_DIAGNOSTIC_TIMEOUT_MS,
   IntervalSuccessTelemetrySampler,
   InvoicePDFRepositorySellerCenter,
   SellerCenterInvoicePDFError,
@@ -150,26 +152,34 @@ test('describeInvoicePDFRequest distinguishes canonical Base64 and PDF magic wit
 });
 
 test('InvoicePDFRepositorySellerCenter maps SuccessResponse JSON', async () => {
-  (sellerCenterClient as unknown as { httpPost: typeof sellerCenterClient.httpPost }).httpPost = async () => ({
-    status: 200,
-    body: JSON.stringify({
-      SuccessResponse: {
-        Head: {
-          RequestId: '123456789',
-          RequestAction: 'SetInvoicePDF',
-          ResponseType: 'Success',
+  let postedBody = '';
+  let diagnosticCalls = 0;
+  (sellerCenterClient as unknown as { httpPost: typeof sellerCenterClient.httpPost }).httpPost = async (_url, body) => {
+    postedBody = body ?? '';
+    return {
+      status: 200,
+      body: JSON.stringify({
+        SuccessResponse: {
+          Head: { RequestId: '123456789', RequestAction: 'SetInvoicePDF', ResponseType: 'Success' },
+          Body: {},
         },
-        Body: {},
-      },
-    }),
-  });
+      }),
+    };
+  };
 
-  const repo = new InvoicePDFRepositorySellerCenter();
-  const result = await repo.uploadPDF(validInput);
+  const repo = new InvoicePDFRepositorySellerCenter(undefined, undefined, {
+    async getOrderItemsByOrderId() {
+      diagnosticCalls += 1;
+      return [];
+    },
+  });
+  const result = await repo.uploadPDF({ ...validInput, sellerOrderId: '1164806328' });
 
   assert.equal(result.ok, true);
   assert.equal(result.alreadyExists, false);
   assert.equal(result.requestId, '123456789');
+  assert.equal(diagnosticCalls, 0);
+  assert.equal('sellerOrderId' in JSON.parse(postedBody), false);
 });
 
 test('InvoicePDFRepositorySellerCenter samples successes independently per finite item-count bucket', async () => {
@@ -279,6 +289,7 @@ test('InvoicePDFRepositorySellerCenter skips full request analysis for a rate-li
 
 test('InvoicePDFRepositorySellerCenter maps E004 as alreadyExists success', async () => {
   let successSamples = 0;
+  let diagnosticCalls = 0;
   logger.info = (() => {
     successSamples += 1;
   }) as typeof logger.info;
@@ -300,13 +311,193 @@ test('InvoicePDFRepositorySellerCenter maps E004 as alreadyExists success', asyn
     }),
   });
 
-  const repo = new InvoicePDFRepositorySellerCenter();
-  const result = await repo.uploadPDF(validInput);
+  const repo = new InvoicePDFRepositorySellerCenter(undefined, undefined, {
+    async getOrderItemsByOrderId() {
+      diagnosticCalls += 1;
+      return [];
+    },
+  });
+  const result = await repo.uploadPDF({ ...validInput, sellerOrderId: '1164806328' });
 
   assert.equal(result.ok, true);
   assert.equal(result.alreadyExists, true);
   assert.equal(result.message, 'Invoice already exists');
   assert.equal(successSamples, 0);
+  assert.equal(diagnosticCalls, 0);
+});
+
+test('describeE004OrderItems emits deterministic finite diagnostics', () => {
+  const baseItems = [
+    {
+      orderItemId: 'sensitive-item-1',
+      orderId: 'sensitive-order',
+      status: 'shipped',
+      shippingType: 'Dropshipping',
+      isProcessable: true,
+      packageId: 'sensitive-package-1',
+    },
+    {
+      orderItemId: 'sensitive-item-2',
+      orderId: 'sensitive-order',
+      status: 'delivered',
+      shippingType: 'FBS',
+      isProcessable: true,
+      packageId: 'sensitive-package-1',
+    },
+  ];
+
+  const cases = [
+    {
+      code: 'REQUESTED_ITEMS_MISSING',
+      items: baseItems.slice(0, 1),
+    },
+    {
+      code: 'ITEM_STATUS_INELIGIBLE',
+      items: baseItems.map((item) => ({ ...item, status: 'pending' })),
+    },
+    {
+      code: 'OWN_WAREHOUSE_ITEMS',
+      items: baseItems.map((item) => ({ ...item, shippingType: 'Own Warehouse' })),
+    },
+    {
+      code: 'ITEMS_NOT_PROCESSABLE',
+      items: baseItems.map((item) => ({ ...item, isProcessable: false })),
+    },
+    {
+      code: 'MULTIPLE_PACKAGES',
+      items: baseItems.map((item, index) => ({ ...item, packageId: `sensitive-package-${index}` })),
+    },
+    {
+      code: 'NO_MISMATCH_DETECTED',
+      items: baseItems,
+    },
+  ] as const;
+
+  for (const entry of cases) {
+    const diagnostic = describeE004OrderItems(['sensitive-item-1', 'sensitive-item-2'], entry.items);
+    assert.equal(diagnostic.code, entry.code);
+    assert.equal(diagnostic.requestedItemCount, 2);
+    const serialized = JSON.stringify(diagnostic);
+    assert.equal(serialized.includes('sensitive-item'), false);
+    assert.equal(serialized.includes('sensitive-order'), false);
+    assert.equal(serialized.includes('sensitive-package'), false);
+  }
+});
+
+test('describeE004OrderItems maps unrecognized provider labels to a finite unknown value', () => {
+  const sensitiveProviderValue = 'customer-sensitive-provider-value';
+  const diagnostic = describeE004OrderItems(['item-1'], [{
+    orderItemId: 'item-1',
+    orderId: 'order-1',
+    status: sensitiveProviderValue,
+    shippingType: sensitiveProviderValue,
+  }]);
+
+  assert.deepEqual(diagnostic.statuses, ['unknown']);
+  assert.deepEqual(diagnostic.shippingTypes, ['unknown']);
+  assert.equal(JSON.stringify(diagnostic).includes(sensitiveProviderValue), false);
+});
+
+test('InvoicePDFRepositorySellerCenter performs one bounded diagnostic lookup after HTTP E004', async () => {
+  let diagnosticCalls = 0;
+  let receivedOrderId: string | undefined;
+  let receivedOptions: { signal?: AbortSignal; timeoutMs?: number } | undefined;
+  (sellerCenterClient as unknown as { httpPost: typeof sellerCenterClient.httpPost }).httpPost = async () => ({
+    status: 404,
+    body: JSON.stringify({
+      ErrorResponse: {
+        Head: { RequestId: 'request-404' },
+        Body: { Errors: [{ Code: 'E004', Message: 'Invalid Request Format' }] },
+      },
+    }),
+  });
+  const abort = new AbortController();
+  const repo = new InvoicePDFRepositorySellerCenter(undefined, undefined, {
+    async getOrderItemsByOrderId(orderId, options) {
+      diagnosticCalls += 1;
+      receivedOrderId = orderId;
+      receivedOptions = options;
+      return [{
+        orderItemId: validInput.orderItemIds[0],
+        orderId,
+        status: 'shipped',
+        shippingType: 'Dropshipping',
+        isProcessable: true,
+        packageId: 'package-private',
+      }];
+    },
+  });
+
+  await assert.rejects(
+    () => repo.uploadPDF({ ...validInput, sellerOrderId: '1164806328' }, { signal: abort.signal }),
+    (error: unknown) => {
+      assert.ok(error instanceof SellerCenterInvoicePDFError);
+      assert.equal(error.code, 'E004');
+      assert.equal(error.message, 'Invalid Request Format');
+      assert.deepEqual(error.diagnostic, {
+        code: 'NO_MISMATCH_DETECTED',
+        requestedItemCount: 1,
+        matchedItemCount: 1,
+        missingItemCount: 0,
+        statuses: ['shipped'],
+        shippingTypes: ['dropshipping'],
+        processability: { processable: 1, notProcessable: 0, unknown: 0 },
+        packageCount: 1,
+      });
+      const serialized = JSON.stringify(error.diagnostic);
+      assert.equal(serialized.includes(validInput.orderItemIds[0]), false);
+      assert.equal(serialized.includes('1164806328'), false);
+      assert.equal(serialized.includes('package-private'), false);
+      assert.equal(serialized.includes(validInput.invoiceDocument), false);
+      return true;
+    }
+  );
+
+  assert.equal(diagnosticCalls, 1);
+  assert.equal(receivedOrderId, '1164806328');
+  assert.equal(receivedOptions?.signal, abort.signal);
+  assert.equal(receivedOptions?.timeoutMs, GET_ORDER_ITEMS_DIAGNOSTIC_TIMEOUT_MS);
+});
+
+test('InvoicePDFRepositorySellerCenter preserves E004 when diagnostics fail', async () => {
+  let diagnosticCalls = 0;
+  (sellerCenterClient as unknown as { httpPost: typeof sellerCenterClient.httpPost }).httpPost = async () => ({
+    status: 404,
+    body: JSON.stringify({
+      ErrorResponse: {
+        Head: { RequestId: 'request-404' },
+        Body: { Errors: [{ Code: 'E004', Message: 'Invalid Request Format' }] },
+      },
+    }),
+  });
+  const repo = new InvoicePDFRepositorySellerCenter(undefined, undefined, {
+    async getOrderItemsByOrderId() {
+      diagnosticCalls += 1;
+      throw new Error('customer-private-upstream-body');
+    },
+  });
+
+  await assert.rejects(
+    () => repo.uploadPDF({ ...validInput, sellerOrderId: '1164806328' }),
+    (error: unknown) => {
+      assert.ok(error instanceof SellerCenterInvoicePDFError);
+      assert.equal(error.code, 'E004');
+      assert.equal(error.message, 'Invalid Request Format');
+      assert.deepEqual(error.diagnostic, {
+        code: 'DIAGNOSTIC_UNAVAILABLE',
+        requestedItemCount: 1,
+        matchedItemCount: null,
+        missingItemCount: null,
+        statuses: [],
+        shippingTypes: [],
+        processability: null,
+        packageCount: null,
+      });
+      assert.equal(JSON.stringify(error).includes('customer-private-upstream-body'), false);
+      return true;
+    }
+  );
+  assert.equal(diagnosticCalls, 1);
 });
 
 test('InvoicePDFRepositorySellerCenter throws typed error on non-E004 error', async () => {

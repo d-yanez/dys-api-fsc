@@ -24,6 +24,13 @@ export class UploadInvoicePDFUseCase {
   ) {}
 
   async execute(input: InvoicePDFUploadInput, options: UploadInvoicePDFOptions = {}): Promise<InvoicePDFUploadResult> {
+    const sellerOrderId = input.sellerOrderId == null || String(input.sellerOrderId).trim() === ''
+      ? undefined
+      : String(input.sellerOrderId).trim();
+    if (sellerOrderId !== undefined && !/^\d+$/.test(sellerOrderId)) {
+      throw new Error('Invalid sellerOrderId');
+    }
+
     const orderItemIds = Array.isArray(input.orderItemIds)
       ? input.orderItemIds.map((v) => String(v).trim()).filter(Boolean)
       : [];
@@ -63,6 +70,7 @@ export class UploadInvoicePDFUseCase {
     }
 
     const normalizedInput: InvoicePDFUploadInput = {
+      ...(sellerOrderId && { sellerOrderId }),
       orderItemIds,
       invoiceNumber,
       invoiceDate,

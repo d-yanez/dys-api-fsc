@@ -51,8 +51,6 @@ export function buildSignedUrl(params: BuildSignedUrlParams): { url: string } {
         action: baseParams.Action,
         version: baseParams.Version,
         format: baseParams.Format,
-        orderId: baseParams.OrderId,
-        url: unsignedUrl
       },
       '🔎 Seller Center request (unsigned)'
     );
@@ -65,15 +63,21 @@ function stripSignature(url: string): string {
   return url.replace(/([?&])Signature=[^&]+&?/, '$1').replace(/[?&]$/, '');
 }
 
-export async function httpGet(url: string): Promise<{ status: number; body: string }> {
-  logger.debug({ url }, '🌐 Calling Seller Center GET');
+export async function httpGet(
+  url: string,
+  options?: { signal?: AbortSignal; timeoutMs?: number }
+): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
+    const action = u.searchParams.get('Action');
+    logger.debug({ action }, '🌐 Calling Seller Center GET');
+    let timeout: NodeJS.Timeout | undefined;
     const req = https.get(
       {
         protocol: u.protocol,
         hostname: u.hostname,
         path: u.pathname + u.search,
+        signal: options?.signal,
         headers: {
           'User-Agent': env.scUserAgent
         }
@@ -85,7 +89,7 @@ export async function httpGet(url: string): Promise<{ status: number; body: stri
           const status = res.statusCode ?? 0;
           if (status !== 200 && process.env.DEBUG_SC_REQUESTS === 'true') {
             logger.warn(
-              { status, bodySnippet: data.slice(0, 300), url: stripSignature(url) },
+              { status, action },
               '⚠️ Seller Center non-200 response'
             );
           }
@@ -95,9 +99,21 @@ export async function httpGet(url: string): Promise<{ status: number; body: stri
     );
 
     req.on('error', (err) => {
-      logger.error({ err }, '❌ Error in httpGet to Seller Center');
+      logger.error({ errorType: err.name, action }, '❌ Error in httpGet to Seller Center');
       reject(err);
     });
+
+    req.once('close', () => {
+      if (timeout) clearTimeout(timeout);
+    });
+
+    if (options?.timeoutMs && options.timeoutMs > 0) {
+      timeout = setTimeout(() => {
+        const error = new Error(`Seller Center request timed out after ${options.timeoutMs}ms`);
+        error.name = 'SellerCenterRequestTimeoutError';
+        req.destroy(error);
+      }, options.timeoutMs);
+    }
   });
 }
 

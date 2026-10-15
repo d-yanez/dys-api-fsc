@@ -5,6 +5,7 @@ import { IdempotencyCompletionTimeoutError, IdempotencyKeyConflictError, Idempot
 
 interface UploadInvoicePDFExecutor {
   execute(input: {
+    sellerOrderId?: string;
     orderItemIds: string[];
     invoiceNumber: string;
     invoiceDate: string;
@@ -51,6 +52,7 @@ export class InvoiceV1Controller {
             upstreamStatus: sellerCenterError.upstreamStatus,
             failureKind: sellerCenterError.failureKind,
             ...(sellerCenterError.requestShape && { requestShape: sellerCenterError.requestShape }),
+            ...(sellerCenterError.diagnostic && { diagnostic: sellerCenterError.diagnostic }),
           }),
         },
         '❌ Error in InvoiceV1Controller.uploadInvoicePDF'
@@ -106,6 +108,7 @@ export class InvoiceV1Controller {
           message: err.message,
           requestId: err.requestId,
           upstreamStatus: err.upstreamStatus,
+          ...(err.diagnostic && { diagnostic: err.diagnostic }),
         });
       }
 
