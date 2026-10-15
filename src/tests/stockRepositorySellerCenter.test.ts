@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import {
   StockRepositorySellerCenter,
   SellerCenterGetStockError,
@@ -7,6 +8,7 @@ import {
   SellerCenterFeedStatusError
 } from '../infrastructure/sellercenter/stockRepositorySellerCenter';
 import * as sellerCenterClient from '../infrastructure/sellercenter/sellerCenterClient';
+import { env } from '../infrastructure/config/env';
 
 const originalHttpGet = sellerCenterClient.httpGet;
 const originalHttpPost = sellerCenterClient.httpPost;
@@ -18,6 +20,55 @@ test.afterEach(() => {
   (sellerCenterClient as unknown as { httpPost: typeof sellerCenterClient.httpPost }).httpPost =
     originalHttpPost;
   process.env.SC_GSC_FACILITY_ID = originalFacilityId;
+});
+
+test('StockRepositorySellerCenter signs and sends GetStock with an unbracketed SellerSku', async () => {
+  let requestedUrl = '';
+
+  (sellerCenterClient as unknown as { httpGet: typeof sellerCenterClient.httpGet }).httpGet =
+    async (url) => {
+      requestedUrl = url;
+      return {
+        status: 200,
+        body: `<?xml version="1.0" encoding="UTF-8"?>
+<SuccessResponse>
+  <Body>
+    <Stocks>
+      <SellerWarehouses>
+        <Warehouse>
+          <FacilityID>FAC-1</FacilityID>
+          <SellerSku>4441904428</SellerSku>
+          <Quantity>2</Quantity>
+        </Warehouse>
+      </SellerWarehouses>
+    </Stocks>
+  </Body>
+</SuccessResponse>`
+      };
+    };
+
+  const repository = new StockRepositorySellerCenter();
+  await repository.getStockBySku('4441904428');
+
+  const url = new URL(requestedUrl);
+  assert.equal(url.searchParams.get('SellerSku'), '4441904428');
+  assert.equal(url.searchParams.has('SellerSku[0]'), false);
+  assert.equal(url.searchParams.has('SellerSku[]'), false);
+
+  const actualSignature = url.searchParams.get('Signature');
+  assert.ok(actualSignature);
+
+  const signedQuery = [...url.searchParams.entries()]
+    .filter(([key]) => key !== 'Signature')
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join('&');
+  const expectedSignature = crypto
+    .createHmac('sha256', env.scApiKey)
+    .update(signedQuery)
+    .digest('hex');
+
+  assert.equal(actualSignature, expectedSignature);
 });
 
 test('StockRepositorySellerCenter maps SuccessResponse XML to JSON contract', async () => {

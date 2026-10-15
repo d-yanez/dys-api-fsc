@@ -117,7 +117,7 @@ export class StockRepositorySellerCenter
     const { url } = buildSignedUrl({
       Action: 'GetStock',
       Version: '1.0',
-      'SellerSku[0]': sku
+      SellerSku: sku
     });
 
     const { status, body } = await httpGet(url);

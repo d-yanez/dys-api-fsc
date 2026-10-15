@@ -241,8 +241,9 @@ Respuesta:
 - `totalQuantity`
 - `warehouses[]` con `sellerWarehouseId`, `facilityId`, `sellerSku`, `quantity`.
 
-Reglas de versionado FSC:
+Reglas del request FSC:
 - Para `GetStock`, enviar `Version=1.0` explícita en el request firmado.
+- Enviar el SKU con la clave exacta `SellerSku`; no usar `SellerSku[0]` ni `SellerSku[]`.
 
 Mapeo de errores FSC:
 - Si FSC retorna `ErrorResponse` con `ErrorCode=1001` y mensaje `Invalid Seller Sku List...`, responder `404`.
