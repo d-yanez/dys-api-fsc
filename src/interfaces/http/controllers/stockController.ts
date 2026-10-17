@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
 import { logger } from '../../../infrastructure/logger/logger';
-import { SellerCenterGetStockError } from '../../../infrastructure/sellercenter/stockRepositorySellerCenter';
+import {
+  SellerCenterGetStockError,
+  SellerCenterStockNotFoundError
+} from '../../../infrastructure/sellercenter/stockRepositorySellerCenter';
 
 interface GetStockBySkuExecutor {
   execute(sku: string): Promise<unknown>;
@@ -17,6 +20,12 @@ export class StockController {
       return res.status(200).json(stock);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
+      let fscErrorCode: string | undefined;
+      if (err instanceof SellerCenterGetStockError) {
+        fscErrorCode = err.errorCode;
+      } else if (err instanceof SellerCenterStockNotFoundError) {
+        fscErrorCode = 'stock_not_found';
+      }
 
       logger.error(
         {
@@ -26,14 +35,23 @@ export class StockController {
           url: req.originalUrl,
           requestId: req.headers['x-request-id'],
           sku,
-          fscErrorCode:
-            err instanceof SellerCenterGetStockError ? err.errorCode : undefined
+          fscErrorCode
         },
         '❌ Error in StockController.getStockBySku'
       );
 
       if (message === 'Invalid sku') {
         return res.status(400).json({ error: 'sku inválido' });
+      }
+
+      if (err instanceof SellerCenterStockNotFoundError) {
+        return res.status(404).json({
+          error: 'SKU no encontrado en Falabella Seller Center',
+          details: {
+            code: 'stock_not_found',
+            message: err.message
+          }
+        });
       }
 
       if (

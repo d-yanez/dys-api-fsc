@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { StockController } from '../interfaces/http/controllers/stockController';
-import { SellerCenterGetStockError } from '../infrastructure/sellercenter/stockRepositorySellerCenter';
+import {
+  SellerCenterGetStockError,
+  SellerCenterStockNotFoundError
+} from '../infrastructure/sellercenter/stockRepositorySellerCenter';
 
 interface MockResponse {
   statusCode: number;
@@ -79,6 +82,34 @@ test('StockController returns 404 for FSC ErrorResponse code 1001', async () => 
     details: {
       code: '1001',
       message: 'Invalid Seller Sku List: 1901928642'
+    }
+  });
+});
+
+test('StockController returns a stable 404 when Seller Center returns an empty stock result', async () => {
+  const controller = new StockController({
+    async execute() {
+      throw new SellerCenterStockNotFoundError('1901928641');
+    }
+  });
+
+  const req = {
+    params: { sku: '1901928641' },
+    method: 'GET',
+    originalUrl: '/v1/stock/1901928641',
+    headers: {}
+  } as any;
+
+  const res = createMockResponse();
+
+  await controller.getStockBySku(req, res as any);
+
+  assert.equal(res.statusCode, 404);
+  assert.deepEqual(res.body, {
+    error: 'SKU no encontrado en Falabella Seller Center',
+    details: {
+      code: 'stock_not_found',
+      message: 'Stock not found for requested SellerSku'
     }
   });
 });

@@ -27,6 +27,13 @@ export class SellerCenterGetStockError extends Error {
   }
 }
 
+export class SellerCenterStockNotFoundError extends Error {
+  constructor(public readonly sku: string) {
+    super('Stock not found for requested SellerSku');
+    this.name = 'SellerCenterStockNotFoundError';
+  }
+}
+
 export class SellerCenterUpdateStockError extends Error {
   constructor(
     message: string,
@@ -195,7 +202,7 @@ export class StockRepositorySellerCenter
       root?.SuccessResponse?.Body?.Stocks?.SellerWarehouses?.Warehouse;
 
     if (!warehouseNode) {
-      throw new Error('Stock not found in Seller Center GetStock response');
+      throw new SellerCenterStockNotFoundError(sku);
     }
 
     const warehousesArray = Array.isArray(warehouseNode)

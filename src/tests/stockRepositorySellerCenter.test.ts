@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import {
   StockRepositorySellerCenter,
   SellerCenterGetStockError,
+  SellerCenterStockNotFoundError,
   SellerCenterUpdateStockError,
   SellerCenterFeedStatusError
 } from '../infrastructure/sellercenter/stockRepositorySellerCenter';
@@ -137,7 +138,7 @@ test('StockRepositorySellerCenter maps ErrorResponse XML to SellerCenterGetStock
   });
 });
 
-test('StockRepositorySellerCenter throws when XML does not contain Stocks/Warehouse', async () => {
+test('StockRepositorySellerCenter maps a successful empty GetStock response to a typed not-found error', async () => {
   (sellerCenterClient as unknown as { httpGet: typeof sellerCenterClient.httpGet }).httpGet =
     async () => ({
       status: 200,
@@ -149,8 +150,10 @@ test('StockRepositorySellerCenter throws when XML does not contain Stocks/Wareho
 
   const repository = new StockRepositorySellerCenter();
 
-  await assert.rejects(async () => repository.getStockBySku('1901928641'), {
-    message: 'Stock not found in Seller Center GetStock response'
+  await assert.rejects(async () => repository.getStockBySku('1901928641'), (err: unknown) => {
+    assert.ok(err instanceof SellerCenterStockNotFoundError);
+    assert.equal(err.sku, '1901928641');
+    return true;
   });
 });
 
