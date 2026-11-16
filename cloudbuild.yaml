@@ -1,6 +1,16 @@
 options:
   logging: CLOUD_LOGGING_ONLY
 
+# Default build: no credential rotation. The rotation step below is a no-op
+# unless a caller explicitly sets _ROTATE_PHASE. Normal builds therefore stay
+# env/secret-neutral and keep every Cloud Run mapping untouched.
+substitutions:
+  _ROTATE_PHASE: "none"
+  _ROTATE_SERVICE: "dys-api-fsc"
+  _ROTATE_REGION: "us-central1"
+  _API_KEY_REF: ""
+  _API_KEY_SECONDARY_REF: ""
+
 steps:
   # 🔨 Build Docker image
   - id: "Build image"
@@ -39,6 +49,35 @@ steps:
           --concurrency=10 \
           --min-instances=0 \
           --max-instances=1 
+
+  # 🔑 Optional, value-free credential rotation (skipped by default)
+  # Runs only when _ROTATE_PHASE is set to rotate|promote|retire|rollback.
+  # Passes Secret Manager references to --update-secrets; key values never
+  # appear in argv, logs, or artifacts. Invalid or missing references fail the
+  # build closed inside scripts/gcp/rotate-inbound-key.sh.
+  - id: "Credential rotation (optional)"
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        if [ "${_ROTATE_PHASE}" = "none" ]; then
+          echo "rotation skipped: default build is env/secret-neutral"
+          exit 0
+        fi
+        if [ -n "${_API_KEY_SECONDARY_REF}" ]; then
+          bash scripts/gcp/rotate-inbound-key.sh "${_ROTATE_PHASE}" \
+            --service "${_ROTATE_SERVICE}" \
+            --region "${_ROTATE_REGION}" \
+            --primary-ref "${_API_KEY_REF}" \
+            --secondary-ref "${_API_KEY_SECONDARY_REF}"
+        else
+          bash scripts/gcp/rotate-inbound-key.sh "${_ROTATE_PHASE}" \
+            --service "${_ROTATE_SERVICE}" \
+            --region "${_ROTATE_REGION}" \
+            --primary-ref "${_API_KEY_REF}"
+        fi
 
 images:
   - "gcr.io/$PROJECT_ID/dys-api-fsc:$SHORT_SHA"

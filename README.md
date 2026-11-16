@@ -39,6 +39,29 @@ curl -H "x-api-key: xxxxx" \
 - `HTTP_JSON_BODY_LIMIT` (opcional, default: `15mb`)
 - Recomendado para `invoiceDocument` en base64: `15mb` o mayor según tamaño de PDF.
 
+## Inbound authentication (`x-api-key`)
+
+Every route except `GET /health` requires the `x-api-key` header.
+
+Environment variables:
+- `API_KEY`: primary key (required).
+- `API_KEY_SECONDARY`: temporary, optional secondary key used during the dual-key rotation window.
+
+Rules:
+- While `API_KEY_SECONDARY` is set, either the primary or the secondary key is accepted.
+- The secondary key never authorizes on its own: if `API_KEY` is missing the service fails closed with `500 { "error": "Server misconfiguration" }`, even when `API_KEY_SECONDARY` is configured and matches.
+- Key material is never printed in logs or returned in responses.
+
+Rotation order (see [docs/CREDENTIAL-ROTATION.md](docs/CREDENTIAL-ROTATION.md)):
+
+1. `rotate`: `API_KEY` = old key, `API_KEY_SECONDARY` = new key. Both are accepted.
+2. `promote`: `API_KEY` = new key, `API_KEY_SECONDARY` = old key, applied in one update. Both are still accepted.
+3. `retire`: remove `API_KEY_SECONDARY` by name. This retires the outgoing old key, because promotion already moved the new key into `API_KEY`. Only `API_KEY` is accepted afterwards.
+
+Rollback restores step 1 and never removes a slot: both keys stay populated until consumer usage of either key is zero. Removing `API_KEY_SECONDARY` before promotion would drop the incoming key and keep the outgoing one, so the order is mandatory.
+
+Rotation is applied with Secret Manager references only, through the optional Cloud Build mode or `scripts/gcp/rotate-inbound-key.sh`; the default image deploy stays environment/secret-neutral and key values never appear in argv, logs, or artifacts.
+
 ## Endpoint nuevo: Stock por SKU (v1)
 
 ### GET `/v1/stock/:sku`

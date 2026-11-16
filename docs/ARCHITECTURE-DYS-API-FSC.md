@@ -193,6 +193,15 @@ errorHandler.ts
 
 Validar x-api-key cuando corresponda.
 
+Dual-key rotation window (`API_KEY` / `API_KEY_SECONDARY`):
+
+- `API_KEY` remains the primary accepted key; `API_KEY_SECONDARY` (optional, temporary) accepts the second key while known consumers migrate.
+- The secondary key never authorizes on its own: a missing `API_KEY` fails closed with `500` (`Server misconfiguration`).
+- Required order: `rotate` (`API_KEY`=old, `API_KEY_SECONDARY`=new) → `promote` (`API_KEY`=new, `API_KEY_SECONDARY`=old, single atomic update) → `retire` (remove `API_KEY_SECONDARY` by name, which retires the outgoing old key). Removing the secondary before promotion would drop the incoming key instead.
+- Rollback restores the `rotate` layout and never removes a slot; both slots stay populated until consumer usage of either key is zero.
+- Comparisons are timing-safe (`SHA-256` digests plus `timingSafeEqual`) and key values are never logged or returned in responses.
+- Delivery is value-free: the optional Cloud Build rotation step and `scripts/gcp/rotate-inbound-key.sh` pass only Secret Manager references to `--update-secrets`, remove slots by bare name, and fail closed on missing or invalid references. The default image deploy stays environment/secret neutral. See `docs/CREDENTIAL-ROTATION.md`.
+
 Sanitizar parámetros básicos.
 
 No exponer detalles internos en respuestas 500.
